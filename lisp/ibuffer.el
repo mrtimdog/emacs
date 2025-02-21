@@ -2210,9 +2210,10 @@ If optional arg SILENT is non-nil, do not display progress messages."
   ;; I tried to update this automatically from the mode-line-process format,
   ;; but changing nil-ness of header-line-format while computing
   ;; mode-line-format is asking a bit too much it seems.  --Stef
-  (when (and ibuffer-use-header-line
-             ibuffer-filtering-qualifiers)
-    (setq header-line-format ibuffer-header-line-format)))
+  (when (eq ibuffer-use-header-line t)
+    (setq header-line-format
+          (and ibuffer-filtering-qualifiers
+               ibuffer-header-line-format))))
 
 (defun ibuffer-sort-bufferlist (bmarklist)
   (unless ibuffer-sorting-functions-alist
