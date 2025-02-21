@@ -1340,13 +1340,13 @@ Order is by depth-first search."
 	     (insert "\n"))
 	   (setq pt (point-marker))
 	   (if byte-compile-current-file
-	       (insert "\f\nCompiling "
+	       (insert "Compiling "
 		       (if (stringp byte-compile-current-file)
 			   (concat "file " byte-compile-current-file)
 			 (concat "in buffer "
                                  (buffer-name byte-compile-current-file)))
 		       " at " (current-time-string) "\n")
-	     (insert "\f\nCompiling internal form(s) at " (current-time-string) "\n"))
+	     (insert "Compiling internal form(s) at " (current-time-string) "\n"))
 	   (when dir
 	     (setq default-directory dir)
 	     (unless was-same
