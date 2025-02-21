@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985--1987, 1993--1995, 1997, 2001--2024 Free Software
+@c Copyright (C) 1985--1987, 1993--1995, 1997, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Rmail
@@ -775,6 +775,14 @@ another window, much like @kbd{C-x 4 m}, but preinitializes the
 to.  The @samp{To} field starts out as the address of the person who
 sent the message you received, and the @samp{CC} field starts out with
 all the other recipients of that message.
+
+@vindex rmail-re-abbrevs
+@vindex rmail-reply-prefix
+@vindex mail-re-regexps
+The @samp{Subject} header field may contain one or more instances of
+@samp{Re:} or localized variants thereof.  These are removed if they
+match @code{rmail-re-abbrevs} (which is initialized from
+@code{mail-re-regexps}), and @code{rmail-reply-prefix} is prepended.
 
 @vindex mail-dont-reply-to-names
   You can exclude certain recipients from being included automatically

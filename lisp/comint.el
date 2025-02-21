@@ -1,6 +1,6 @@
 ;;; comint.el --- general command interpreter in a window stuff -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1990, 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1988, 1990, 1992-2025 Free Software Foundation, Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
 ;;	Simon Marshall <simon@gnu.org>
@@ -543,6 +543,7 @@ via PTYs.")
     (define-key map "\er" 	  'comint-history-isearch-backward-regexp)
     (define-key map [?\C-c ?\M-r] 'comint-previous-matching-input-from-input)
     (define-key map [?\C-c ?\M-s] 'comint-next-matching-input-from-input)
+    (define-key map [?\C-x up]    'comint-complete-input-ring)
     (define-key map "\e\C-l" 	  'comint-show-output)
     (define-key map "\C-m" 	  'comint-send-input)
     (define-key map "\C-d" 	  'comint-delchar-or-maybe-eof)
@@ -1180,6 +1181,24 @@ See also `comint-read-input-ring'."
 	    (set-window-configuration conf)
 	  (push ch unread-command-events))))))
 
+(defun comint-complete-input-ring ()
+  "Complete a list of recent inputs entered into the current buffer.
+Like `minibuffer-complete-history' but completes on comint inputs.
+This function makes `comint-dynamic-list-input-ring' obsolete."
+  (interactive)
+  (let ((completions
+         (if (and (ring-p comint-input-ring)
+                  (not (ring-empty-p comint-input-ring)))
+             (ring-elements comint-input-ring)
+           (user-error "No history available")))
+        (completion-in-region-mode-predicate
+         (lambda () (get-buffer-window "*Completions*" 0))))
+    (completion-in-region
+     (comint-line-beginning-position) (point-max)
+     (completion-table-with-metadata
+      completions '((category . comint-input)
+                    (display-sort-function . identity)
+                    (cycle-sort-function . identity))))))
 
 (defun comint-regexp-arg (prompt)
   "Return list of regexp and prefix arg using PROMPT."
@@ -1538,16 +1557,20 @@ If nil, Isearch operates on the whole comint buffer."
   :group 'comint
   :version "23.2")
 
+(defvar comint--force-history-isearch nil
+  "Non-nil means to force searching in input history.
+If nil, respect the option `comint-history-isearch'.")
+
 (defun comint-history-isearch-backward ()
   "Search for a string backward in input history using Isearch."
   (interactive nil comint-mode)
-  (setq comint-history-isearch t)
+  (setq comint--force-history-isearch t)
   (isearch-backward nil t))
 
 (defun comint-history-isearch-backward-regexp ()
   "Search for a regular expression backward in input history using Isearch."
   (interactive nil comint-mode)
-  (setq comint-history-isearch t)
+  (setq comint--force-history-isearch t)
   (isearch-backward-regexp nil t))
 
 (defvar-local comint-history-isearch-message-overlay nil)
@@ -1563,7 +1586,8 @@ Intended to be added to `isearch-mode-hook' in `comint-mode'."
 		    (forward-line 0)
 		    (point))
 		  (comint-line-beginning-position)))
-	 (or (eq comint-history-isearch t)
+	 (or comint--force-history-isearch
+             (eq comint-history-isearch t)
 	     (and (eq comint-history-isearch 'dwim)
 		  ;; Point is at command line.
 		  (comint-after-pmark-p))))
@@ -1593,7 +1617,7 @@ Intended to be added to `isearch-mode-hook' in `comint-mode'."
   (kill-local-variable 'isearch-lazy-count)
   (remove-hook 'isearch-mode-end-hook 'comint-history-isearch-end t)
   (unless isearch-suspended
-    (custom-reevaluate-setting 'comint-history-isearch)))
+    (setq comint--force-history-isearch nil)))
 
 (defun comint-goto-input (pos)
   "Put input history item of the absolute history position POS."
@@ -1732,7 +1756,7 @@ Go to the history element by the absolute history position HIST-POS."
 Quotes are single and double."
   (let ((countsq (comint-how-many-region "\\(^\\|[^\\]\\)'" beg end))
 	(countdq (comint-how-many-region "\\(^\\|[^\\]\\)\"" beg end)))
-    (or (= (mod countsq 2) 1) (= (mod countdq 2) 1))))
+    (or (oddp countsq) (oddp countdq))))
 
 (defun comint-how-many-region (regexp beg end)
   "Return number of matches for REGEXP from BEG to END."
@@ -3229,7 +3253,7 @@ Note that this applies to `comint-dynamic-complete-filename' only."
   :group 'comint-completion)
 
 ;;;###autoload
-(defvar comint-file-name-prefix (purecopy "")
+(defvar comint-file-name-prefix ""
   "Prefix prepended to absolute file names taken from process input.
 This is used by Comint's and shell's completion functions, and by shell's
 directory tracking functions.")

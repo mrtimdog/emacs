@@ -1,5 +1,5 @@
 /* Execution of byte code produced by bytecomp.el.
-   Copyright (C) 1985-1988, 1993, 2000-2024 Free Software Foundation,
+   Copyright (C) 1985-1988, 1993, 2000-2025 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -27,7 +27,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "keyboard.h"
 #include "syntax.h"
 #include "window.h"
-#include "puresize.h"
 
 /* Define BYTE_CODE_SAFE true to enable some minor sanity checking,
    useful for debugging the byte compiler.  It defaults to false.  */
@@ -327,7 +326,7 @@ If the third argument is incorrect, Emacs may crash.  */)
 static void
 bcall0 (Lisp_Object f)
 {
-  Ffuncall (1, &f);
+  calln (f);
 }
 
 /* The bytecode stack size in bytes.
@@ -1639,7 +1638,6 @@ exec_byte_code (Lisp_Object fun, ptrdiff_t args_template,
 		record_in_backtrace (Qsetcar, &TOP, 2);
 		wrong_type_argument (Qconsp, cell);
 	      }
-	    CHECK_IMPURE (cell, XCONS (cell));
 	    XSETCAR (cell, newval);
 	    TOP = newval;
 	    NEXT;
@@ -1654,7 +1652,6 @@ exec_byte_code (Lisp_Object fun, ptrdiff_t args_template,
 		record_in_backtrace (Qsetcdr, &TOP, 2);
 		wrong_type_argument (Qconsp, cell);
 	      }
-	    CHECK_IMPURE (cell, XCONS (cell));
 	    XSETCDR (cell, newval);
 	    TOP = newval;
 	    NEXT;

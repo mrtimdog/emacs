@@ -1,6 +1,6 @@
 ;;; semantic/bovine/el.el --- Semantic details for Emacs Lisp  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1999-2005, 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2005, 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 
@@ -765,7 +765,7 @@ In Emacs Lisp this is easily defined by parenthesis bounding."
 		  (forward-comment 1)
 		  (setq start (point))
 		  (forward-sexp 1)
-		  (if (= (% count 2) 1)
+		  (if (oddp count)
 		      (setq lastodd
 			    (buffer-substring-no-properties start (point))))
 		  )

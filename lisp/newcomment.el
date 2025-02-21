@@ -1,6 +1,6 @@
 ;;; newcomment.el --- (un)comment regions of buffers -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: code extracted from Emacs-20's simple.el
 ;; Maintainer: Stefan Monnier <monnier@gnu.org>
@@ -136,7 +136,7 @@ by the close of the first pair.")
 (put 'comment-end-skip 'safe-local-variable 'stringp)
 
 ;;;###autoload
-(defvar comment-end (purecopy "")
+(defvar comment-end ""
   "String to insert to end a new comment.
 Should be an empty string if comments are terminated by end-of-line.")
 ;;;###autoload
@@ -288,7 +288,7 @@ See `comment-styles' for a list of available styles."
   :group 'comment)
 
 ;;;###autoload
-(defcustom comment-padding (purecopy " ")
+(defcustom comment-padding " "
   "Padding string that `comment-region' puts between comment chars and text.
 Can also be an integer which will be automatically turned into a string
 of the corresponding number of spaces.

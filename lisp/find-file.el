@@ -4,7 +4,7 @@
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: c, matching, tools
 
-;; Copyright (C) 1994-1995, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1995, 2001-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -182,7 +182,7 @@ To override this, give an argument to `ff-find-other-file'."
 ;;;###autoload
 (defcustom ff-special-constructs
   ;; C/C++ include, for NeXTstep too
-  `((,(purecopy "^#\\s *\\(include\\|import\\)\\s +[<\"]\\(.*\\)[>\"]") .
+  `(("^#\\s *\\(include\\|import\\)\\s +[<\"]\\(.*\\)[>\"]" .
      ,(lambda () (match-string 2))))
   ;; We include `ff-treat-as-special' documentation here so that autoload
   ;; can make it available to be read prior to loading this file.

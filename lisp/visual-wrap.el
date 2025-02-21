@@ -1,6 +1,6 @@
 ;;; visual-wrap.el --- Smart line-wrapping with wrap-prefix -*- lexical-binding: t -*-
 
-;; Copyright (C) 2011-2021, 2024 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2021, 2024-2025 Free Software Foundation, Inc.
 
 ;; Author: Stephen Berman <stephen.berman@gmx.net>
 ;;         Stefan Monnier <monnier@iro.umontreal.ca>
@@ -164,7 +164,7 @@ PREFIX was empty."
     ;; units of the font's average-width) large enough to fit the
     ;; first-line prefix.
     (let ((avg-space (propertize (buffer-substring position (1+ position))
-                                 'display '(space :width 1))))
+                                 'display '(space :width (1 . width)))))
       ;; Remove any `min-width' display specs since we'll replace with
       ;; our own later in `visual-wrap--apply-to-line' (bug#73882).
       (add-display-text-property 0 (length prefix) 'min-width nil prefix)

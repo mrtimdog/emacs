@@ -1,6 +1,6 @@
 ;;; ebnf2ps.el --- translate an EBNF to a syntactic chart on PostScript  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: Vinicius Jose Latorre <viniciusjl.gnu@gmail.com>
 ;; Keywords: text, ebnf, PostScript
@@ -5947,7 +5947,7 @@ killed after process termination."
 
 (defun ebnf-end-of-string ()
   (let ((n 1))
-    (while (> (logand n 1) 0)
+    (while (oddp n)
       (skip-chars-forward "^\"" ebnf-limit)
       (setq n (- (skip-chars-backward "\\\\")))
       (goto-char (+ (point) n 1))))

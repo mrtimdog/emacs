@@ -1,6 +1,6 @@
 /* Basic character set support.
 
-Copyright (C) 2001-2024 Free Software Foundation, Inc.
+Copyright (C) 2001-2025 Free Software Foundation, Inc.
 
 Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
   2005, 2006, 2007, 2008, 2009, 2010, 2011
@@ -684,7 +684,7 @@ map_charset_for_dump (void (*c_function) (Lisp_Object, Lisp_Object),
 	  if (c_function)
 	    (*c_function) (arg, range);
 	  else
-	    call2 (function, range, arg);
+	    calln (function, range, arg);
 	  XSETCAR (range, Qnil);
 	}
       if (c == stop)
@@ -697,7 +697,7 @@ map_charset_for_dump (void (*c_function) (Lisp_Object, Lisp_Object),
 		  if (c_function)
 		    (*c_function) (arg, range);
 		  else
-		    call2 (function, range, arg);
+		    calln (function, range, arg);
 		}
 	      break;
 	    }
@@ -739,7 +739,7 @@ map_charset_chars (void (*c_function)(Lisp_Object, Lisp_Object), Lisp_Object fun
       if (NILP (function))
 	(*c_function) (arg, range);
       else
-	call2 (function, range, arg);
+	calln (function, range, arg);
     }
   else if (CHARSET_METHOD (charset) == CHARSET_METHOD_MAP)
     {

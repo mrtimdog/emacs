@@ -1,6 +1,6 @@
 ;;; tramp-cmds.el --- Interactive commands for Tramp  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -173,7 +173,7 @@ interactively, a Tramp connection has to be selected."
 		     (get-buffer (tramp-debug-buffer-name vec)))
 		   (unless keep-debug
 		     (get-buffer (tramp-trace-buffer-name vec)))
-		   (tramp-get-connection-property vec " process-buffer")))
+		   (tramp-get-connection-property vec " connected")))
       (when (bufferp buf) (kill-buffer buf)))
 
     ;; Flush file cache.
@@ -368,7 +368,7 @@ function returns nil"
 	(when (string-match-p (or (eval (car item) t) "") string)
 	  (setq tdra nil
 		result
-		(format-spec
+		(tramp-format-spec
 		 (cdr item) (format-spec-make ?m method ?u user ?h host)))))
       result)))
 

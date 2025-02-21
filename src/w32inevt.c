@@ -1,5 +1,5 @@
 /* Input event support for Emacs on the Microsoft Windows API.
-   Copyright (C) 1992-1993, 1995, 2001-2024 Free Software Foundation,
+   Copyright (C) 1992-1993, 1995, 2001-2025 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -467,12 +467,16 @@ do_mouse_event (MOUSE_EVENT_RECORD *event,
 		struct input_event *emacs_ev)
 {
   static DWORD button_state = 0;
-  static Lisp_Object last_mouse_window;
   DWORD but_change, mask, flags = event->dwEventFlags;
   int i;
 
-  /* Mouse didn't move unless MOUSE_MOVED says it did.  */
   struct frame *f = get_frame ();
+
+  /* For now, mouse events on child frames are ignored, because the
+     coordinate conversion is not in place; FIXME.  */
+  if (FRAMEP (f->parent_frame))
+    return 0;
+  /* Mouse didn't move unless MOUSE_MOVED says it did.  */
   f->mouse_moved = 0;
 
   switch (flags)
@@ -618,6 +622,10 @@ maybe_generate_resize_event (void)
 {
   CONSOLE_SCREEN_BUFFER_INFO info;
   struct frame *f = get_frame ();
+
+  /* Only resize the root frame.  */
+  if (FRAMEP (f->parent_frame))
+    return;
 
   GetConsoleScreenBufferInfo (GetStdHandle (STD_OUTPUT_HANDLE), &info);
 

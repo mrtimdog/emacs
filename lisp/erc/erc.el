@@ -1,6 +1,6 @@
 ;;; erc.el --- An Emacs Internet Relay Chat client  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2025 Free Software Foundation, Inc.
 
 ;; Author: Alexander L. Belikoff <alexander@belikoff.net>
 ;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
@@ -1272,10 +1272,11 @@ particular sessions and/or `let'-bound for spells."
   :group 'erc)
 
 (defcustom erc-mode-hook nil
-  "Hook run after `erc-mode' setup is finished."
+  "Hook run after `erc-mode' setup is finished.
+Members should be robust enough to run in any order and not depend on
+hook depth."
   :group 'erc-hooks
-  :type 'hook
-  :options '(erc-add-scroll-to-bottom))
+  :type 'hook)
 
 (defcustom erc-timer-hook nil
   "Abnormal hook run after each response handler.
@@ -2519,9 +2520,9 @@ nil."
   (if old-vars
       (let ((out (list (reverse new-modes))))
         (pcase-dolist (`(,k . ,v) old-vars)
-          (when (and (string-prefix-p "erc-" (symbol-name k))
-                     (string-suffix-p "-mode" (symbol-name k))
-                     (get k 'erc-module))
+          (when (and (get k 'erc-module)
+                     (string-prefix-p "erc-" (symbol-name k))
+                     (string-suffix-p "-mode" (symbol-name k)))
             (if v
                 (cl-pushnew k (car out))
               (setf (car out) (delq k (car out)))
@@ -2661,7 +2662,9 @@ side effect of setting the current buffer to the one it returns.  Use
     (erc--initialize-markers old-point continued-session)
     (erc-determine-parameters server port nick full-name user passwd)
     (save-excursion (run-mode-hooks)
-                    (dolist (mod (car delayed-modules)) (funcall mod +1))
+                    (dolist (mod (car delayed-modules))
+                      (unless (and (boundp mod) (symbol-value mod))
+                        (funcall mod +1)))
                     (dolist (var (cdr delayed-modules)) (set var nil)))
 
     ;; Saving log file on exit
@@ -9572,6 +9575,8 @@ SOFTP, only do so when defined as a variable."
    (ignore-list . "%-8p %s")
    (reconnecting . "Reconnecting in %ms: attempt %i/%n ...")
    (reconnect-canceled . "Canceled %u reconnect timer with %cs to go...")
+   (recon-probe-hung-up . "Server answered but hung up. Delaying by %ts...")
+   (recon-probe-nobody-home . "Nobody home...")
    (finished . "\n\n*** ERC finished ***\n")
    (terminated . "\n\n*** ERC terminated: %e\n")
    (login . "Logging in as `%n'...")
@@ -9730,7 +9735,7 @@ if yet untried."
   "Format MSG according to ARGS.
 
 See also `format-spec'."
-  (when (eq (logand (length args) 1) 1) ; oddp
+  (unless (cl-evenp (length args))
     (error "Obscure usage of this function appeared"))
   (let ((entry (erc-retrieve-catalog-entry msg)))
     (when (not entry)

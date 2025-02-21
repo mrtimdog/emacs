@@ -1,6 +1,6 @@
 ;;; package.el --- Simple package system for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Tom Tromey <tromey@redhat.com>
 ;;         Daniel Hackney <dan@haxney.org>
@@ -837,11 +837,15 @@ PKG-DESC is a `package-desc' object."
         (unless (equal file result)
           (throw 'done result))))))
 
-(defun package--reload-previously-loaded (pkg-desc)
+(defun package--reload-previously-loaded (pkg-desc &optional warn)
   "Force reimportation of files in PKG-DESC already present in `load-history'.
 New editions of files contain macro definitions and
 redefinitions, the overlooking of which would cause
-byte-compilation of the new package to fail."
+byte-compilation of the new package to fail.
+If WARN is a string, display a warning (using WARN as a format string)
+before reloading the files.  WARN must have two %-sequences
+corresponding to package name (a symbol) and a list of files loaded (as
+sexps)."
   (with-demoted-errors "Error in package--load-files-for-activation: %s"
     (let* (result
            (dir (package-desc-dir pkg-desc))
@@ -877,6 +881,10 @@ byte-compilation of the new package to fail."
           (unless (equal (file-name-base library)
                          (format "%s-autoloads" (package-desc-name pkg-desc)))
             (push (cons (expand-file-name library dir) recent-index) result))))
+      (when (and result warn)
+        (display-warning 'package
+                         (format warn (package-desc-name pkg-desc)
+                                 (mapcar #'car result))))
       (mapc (lambda (c) (load (car c) nil t))
             (sort result (lambda (x y) (< (cdr x) (cdr y))))))))
 
@@ -904,8 +912,11 @@ correspond to previously loaded files."
       (if (listp package--quickstart-pkgs)
           ;; We're only collecting the set of packages to activate!
           (push pkg-desc package--quickstart-pkgs)
-        (when reload
-          (package--reload-previously-loaded pkg-desc))
+        (when (or reload (assq name package--builtin-versions))
+          (package--reload-previously-loaded
+           pkg-desc (unless reload
+                      "Package %S is activated too late.
+The following files have already been loaded: %S")))
         (with-demoted-errors "Error loading autoloads: %s"
           (load (package--autoloads-file-name pkg-desc) nil t)))
       ;; Add info node.
@@ -1157,11 +1168,11 @@ Signal an error if the entire string was not used."
 
 (declare-function lm-header "lisp-mnt" (header))
 (declare-function lm-package-requires "lisp-mnt" (&optional file))
+(declare-function lm-package-version "lisp-mnt" (&optional file))
 (declare-function lm-website "lisp-mnt" (&optional file))
 (declare-function lm-keywords-list "lisp-mnt" (&optional file))
 (declare-function lm-maintainers "lisp-mnt" (&optional file))
 (declare-function lm-authors "lisp-mnt" (&optional file))
-(declare-function lm-package-needs-footer-line "lisp-mnt" (&optional file))
 
 (defun package-buffer-info ()
   "Return a `package-desc' describing the package in the current buffer.
@@ -1173,32 +1184,16 @@ boundaries."
   (unless (re-search-forward "^;;; \\([^ ]*\\)\\.el ---[ \t]*\\(.*?\\)[ \t]*\\(-\\*-.*-\\*-[ \t]*\\)?$" nil t)
     (error "Package lacks a file header"))
   (let ((file-name (match-string-no-properties 1))
-        (desc      (match-string-no-properties 2))
-        (start     (line-beginning-position)))
+        (desc      (match-string-no-properties 2)))
     (require 'lisp-mnt)
-    ;; This warning was added in Emacs 27.1, and should be removed at
-    ;; the earliest in version 31.1.  The idea is to phase out the
-    ;; requirement for a "footer line" without unduly impacting users
-    ;; on earlier Emacs versions.  See Bug#26490 for more details.
-    (unless (search-forward (concat ";;; " file-name ".el ends here") nil 'move)
-      (when (lm-package-needs-footer-line)
-        (lwarn '(package package-format) :warning
-               "Package lacks a terminating comment")))
-    ;; Try to include a trailing newline.
-    (forward-line)
-    (narrow-to-region start (point))
-    ;; Use some headers we've invented to drive the process.
-    (let* (;; Prefer Package-Version; if defined, the package author
-           ;; probably wants us to use it.  Otherwise try Version.
-           (version-info
-            (or (lm-header "package-version") (lm-header "version")))
+    (let* ((version-info (lm-package-version))
            (pkg-version (package-strip-rcs-id version-info))
            (keywords (lm-keywords-list))
            (website (lm-website)))
       (unless pkg-version
-         (if version-info
-             (error "Unrecognized package version: %s" version-info)
-           (error "Package lacks a \"Version\" or \"Package-Version\" header")))
+        (if version-info
+            (error "Unrecognized package version: %s" version-info)
+          (error "Package lacks a \"Version\" or \"Package-Version\" header")))
       (package-desc-from-define
        file-name pkg-version desc
        (lm-package-requires)
@@ -1751,7 +1746,7 @@ The variable `package-load-list' controls which packages to load."
   (setq file (expand-file-name file))
   (let ((context (epg-make-context 'OpenPGP)))
     (when package-gnupghome-dir
-      (with-file-modes 448
+      (with-file-modes #o700
         (make-directory package-gnupghome-dir t))
       (setf (epg-context-home-directory context) package-gnupghome-dir))
     (message "Importing %s..." (file-name-nondirectory file))
@@ -1829,10 +1824,11 @@ Populate `package-archive-contents' with the result.
 If optional argument ASYNC is non-nil, perform the downloads
 asynchronously."
   (dolist (archive package-archives)
-    (condition-case-unless-debug nil
+    (condition-case-unless-debug err
         (package--download-one-archive archive "archive-contents" async)
-      (error (message "Failed to download `%s' archive."
-               (car archive))))))
+      (error (message "Failed to download `%s' archive: %s"
+                      (car archive)
+                      (error-message-string err))))))
 
 (defvar package-refresh-contents-hook (list #'package--download-and-read-archives)
   "List of functions to call to refresh the package archive.
@@ -1846,8 +1842,11 @@ For each archive configured in the variable `package-archives',
 inform Emacs about the latest versions of all packages it offers,
 and make them available for download.
 Optional argument ASYNC specifies whether to perform the
-downloads in the background."
-  (interactive)
+downloads in the background.  This is always the case when the command
+is invoked interactively."
+  (interactive (list t))
+  (when async
+    (message "Refreshing package contents..."))
   (unless (file-exists-p package-user-dir)
     (make-directory package-user-dir t))
   (let ((default-keyring (expand-file-name "package-keyring.gpg"
@@ -1856,7 +1855,8 @@ downloads in the background."
     (when (and (package-check-signature) (file-exists-p default-keyring))
       (condition-case-unless-debug error
           (package-import-keyring default-keyring)
-        (error (message "Cannot import default keyring: %S" (cdr error))))))
+        (error (message "Cannot import default keyring: %s"
+                        (error-message-string error))))))
   (run-hook-with-args 'package-refresh-contents-hook async))
 
 
@@ -2495,8 +2495,9 @@ compiled."
 (defun package-delete (pkg-desc &optional force nosave)
   "Delete package PKG-DESC.
 
-Argument PKG-DESC is a full description of package as vector.
-Interactively, prompt the user for the package name and version.
+Argument PKG-DESC is the full description of the package, for example as
+obtained by `package-get-descriptor'.  Interactively, prompt the user
+for the package name and version.
 
 When package is used elsewhere as dependency of another package,
 refuse deleting it and return an error.
@@ -2649,16 +2650,23 @@ argument, don't ask for confirmation to install packages."
 
 (defun package-isolate (packages &optional temp-init)
   "Start an uncustomized Emacs and only load a set of PACKAGES.
+Interactively, prompt for PACKAGES to load, which should be specified
+separated by commas.
+If called from Lisp, PACKAGES should be a list of packages to load.
 If TEMP-INIT is non-nil, or when invoked with a prefix argument,
-the Emacs user directory is set to a temporary directory."
+the Emacs user directory is set to a temporary directory.
+This command is intended for testing Emacs and/or the packages
+in a clean environment."
   (interactive
    (cl-loop for p in (cl-loop for p in (package--alist) append (cdr p))
 	    unless (package-built-in-p p)
 	    collect (cons (package-desc-full-name p) p) into table
 	    finally return
-	    (list (cl-loop for c in (completing-read-multiple
-                                     "Isolate packages: " table
-                                     nil t)
+	    (list
+             (cl-loop for c in
+                      (completing-read-multiple
+                       "Packages to isolate: " table
+                       nil t)
 		           collect (alist-get c table nil nil #'string=))
                   current-prefix-arg)))
   (let* ((name (concat "package-isolate-"
@@ -2864,7 +2872,7 @@ Helper function for `describe-package'."
                                   'action #'package-delete-button-action
                                   'package-desc desc)))
           (incompatible-reason
-           (insert (propertize "Incompatible" 'font-lock-face font-lock-warning-face)
+           (insert (propertize "Incompatible" 'font-lock-face 'font-lock-warning-face)
                    " because it depends on ")
            (if (stringp incompatible-reason)
                (insert "Emacs " incompatible-reason ".")
@@ -3989,8 +3997,9 @@ Return nil if there were no errors; non-nil otherwise."
               (package-delete elt nil 'nosave))
           (error
            (push (package-desc-full-name elt) errors)
-           (message "Error trying to delete `%s': %S"
-                    (package-desc-full-name elt) err)))))
+           (message "Error trying to delete `%s': %s"
+                    (package-desc-full-name elt)
+                    (error-message-string err))))))
     errors))
 
 (defun package--update-selected-packages (add remove)
@@ -4280,7 +4289,7 @@ string, show all packages.
 When called interactively, prompt for ARCHIVE.  To specify
 several archives, type their names separated by commas."
   (interactive (list (completing-read-multiple
-                      "Filter by archive (comma separated): "
+                      "Filter by archive: "
                       (mapcar #'car package-archives)))
                package-menu-mode)
   (package--ensure-package-menu-mode)
@@ -4324,7 +4333,7 @@ or \"built-in\" or \"obsolete\".
 When called interactively, prompt for KEYWORD.  To specify several
 keywords, type them separated by commas."
   (interactive (list (completing-read-multiple
-                      "Keywords (comma separated): "
+                      "Keywords: "
                       (package-all-keywords)))
                package-menu-mode)
   (package--ensure-package-menu-mode)
@@ -4537,10 +4546,7 @@ the `Version:' header."
         (unless (file-readable-p mainfile) (setq mainfile file))
         (when (file-readable-p mainfile)
           (require 'lisp-mnt)
-          (with-temp-buffer
-            (insert-file-contents mainfile)
-            (or (lm-header "package-version")
-                (lm-header "version")))))))))
+          (lm-package-version mainfile)))))))
 
 
 ;;;; Quickstart: precompute activation actions for faster start up.

@@ -1,6 +1,6 @@
-;;; rx.el --- S-exp notation for regexps           --*- lexical-binding: t -*-
+;;; rx.el --- S-exp notation for regexps            -*- lexical-binding: t -*-
 
-;; Copyright (C) 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -1072,7 +1072,7 @@ Return (REGEXP . PRECEDENCE)."
   "Expand `eval' arguments.  Return a new rx form."
   (unless (and body (null (cdr body)))
     (error "rx `eval' form takes exactly one argument"))
-  (eval (car body)))
+  (eval (car body) lexical-binding))
 
 (defun rx--translate-eval (body)
   "Translate the `eval' form.  Return (REGEXP . PRECEDENCE)."

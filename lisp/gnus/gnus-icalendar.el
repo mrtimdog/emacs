@@ -1,6 +1,6 @@
 ;;; gnus-icalendar.el --- reply to iCalendar meeting requests  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; Author: Jan Tatarik <Jan.Tatarik@gmail.com>
 ;; Keywords: mail, icalendar, org
@@ -510,7 +510,8 @@ Return nil for non-recurring EVENT."
      ;; A 0:0 - A .:. -> A 0:0-.:. (default 1)
      ;; A 0:0 - A+n .:. -> A - A+n .:.
      ((and start-at-midnight
-           (cl-plusp start-end-date-diff)) (format "<%s>--<%s %s>" start-date end-date end-time))
+           (plusp start-end-date-diff))
+      (format "<%s>--<%s %s>" start-date end-date end-time))
      ;; default
      ;; A .:. - A .:. -> A .:.-.:.
      ;; A .:. - B .:.

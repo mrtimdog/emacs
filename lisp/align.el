@@ -1,6 +1,6 @@
 ;;; align.el --- align text to a specific column, by regexp -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1076,7 +1076,7 @@ current position."
 	       (while (and (> pos (point-min))
 			   (eq (char-before pos) ?\\))
 		 (setq count (1+ count) pos (1- pos)))
-	       (eq (mod count 2) 1))
+	       (oddp count))
 	     (goto-char (match-beginning (if reverse 1 2)))))
     result))
 

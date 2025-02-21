@@ -1,6 +1,6 @@
 ;;; bookmark.el --- set bookmarks, maybe annotate them, jump to them later -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1997, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1997, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Karl Fogel <kfogel@red-bean.com>
 ;; Created: July, 1993
@@ -165,6 +165,10 @@ This includes the annotations column.")
 You can toggle whether files are shown with \\<bookmark-bmenu-mode-map>\\[bookmark-bmenu-toggle-filenames]."
   :type 'natnum)
 
+(defcustom bookmark-bmenu-type-column-width 8
+  "Column width for bookmark type in a buffer listing bookmarks."
+  :type 'natnum
+  :version "31.1")
 
 (defcustom bookmark-bmenu-toggle-filenames t
   "Non-nil means show filenames when listing bookmarks.
@@ -587,11 +591,8 @@ If DEFAULT is nil then return empty string for empty input."
     (let* ((completion-ignore-case bookmark-completion-ignore-case)
            (default (unless (equal "" default) default)))
       (completing-read (format-prompt prompt default)
-                       (lambda (string pred action)
-                         (if (eq action 'metadata)
-                             '(metadata (category . bookmark))
-                             (complete-with-action
-                              action bookmark-alist string pred)))
+                       (completion-table-with-metadata
+                        bookmark-alist '((category . bookmark)))
                        nil 0 nil 'bookmark-history default))))
 
 
@@ -602,7 +603,7 @@ from other commands that pass in the bookmark name, so
 `completing-read' never gets a chance to set `bookmark-history'."
   `(or
     (called-interactively-p 'interactive)
-    (setq bookmark-history (cons ,string bookmark-history))))
+    (add-to-history 'bookmark-history ,string)))
 
 (defvar bookmark-make-record-function 'bookmark-make-record-default
   "A function that should be called to create a bookmark record.
@@ -1259,33 +1260,34 @@ Useful for example to unhide text in `outline-mode'.")
 
 (defun bookmark--jump-via (bookmark-name-or-record display-function)
   "Handle BOOKMARK-NAME-OR-RECORD, then call DISPLAY-FUNCTION.
-DISPLAY-FUNCTION is called with the current buffer as argument.
+DISPLAY-FUNCTION is called with the new buffer as argument.
 
 After calling DISPLAY-FUNCTION, set window point to the point specified
 by BOOKMARK-NAME-OR-RECORD, if necessary, run `bookmark-after-jump-hook',
 and then show any annotations for this bookmark."
-  (bookmark-handle-bookmark bookmark-name-or-record)
-  ;; Store `point' now, because `display-function' might change it.
-  (let ((point (point)))
-    (save-current-buffer
-      (funcall display-function (current-buffer)))
-    (let ((win (get-buffer-window (current-buffer) 0)))
-      (if win (set-window-point win point))))
-  ;; FIXME: we used to only run bookmark-after-jump-hook in
-  ;; `bookmark-jump' itself, but in none of the other commands.
-  (when bookmark-fringe-mark
-    (let ((overlays (overlays-in (pos-bol) (1+ (pos-bol))))
-          temp found)
-      (while (and (not found) (setq temp (pop overlays)))
-        (when (eq 'bookmark (overlay-get temp 'category))
-          (setq found t)))
-      (unless found
-        (bookmark--set-fringe-mark))))
-  (run-hooks 'bookmark-after-jump-hook)
-  (if bookmark-automatically-show-annotations
+  (let (buf point)
+    (save-window-excursion
+      (bookmark-handle-bookmark bookmark-name-or-record)
+      (setq buf (current-buffer)
+            point (point)))
+    (funcall display-function buf)
+    (when-let* ((win (get-buffer-window buf 0)))
+      (set-window-point win point))
+    (when bookmark-fringe-mark
+      (let ((overlays (overlays-in (pos-bol) (1+ (pos-bol))))
+            temp found)
+        (while (and (not found) (setq temp (pop overlays)))
+          (when (eq 'bookmark (overlay-get temp 'category))
+            (setq found t)))
+        (unless found
+          (bookmark--set-fringe-mark))))
+    ;; FIXME: we used to only run bookmark-after-jump-hook in
+    ;; `bookmark-jump' itself, but in none of the other commands.
+    (run-hooks 'bookmark-after-jump-hook)
+    (when bookmark-automatically-show-annotations
       ;; if there is an annotation for this bookmark,
       ;; show it in a buffer.
-      (bookmark-show-annotation bookmark-name-or-record)))
+      (bookmark-show-annotation bookmark-name-or-record))))
 
 
 ;;;###autoload
@@ -1584,6 +1586,8 @@ confirmation."
   (when (or no-confirm
             (yes-or-no-p "Permanently delete all bookmarks? "))
     (bookmark-maybe-load-default-file)
+    (dolist (bm bookmark-alist)
+      (bookmark--remove-fringe-mark bm))
     (setq bookmark-alist-modification-count
           (+ bookmark-alist-modification-count (length bookmark-alist)))
     (setq bookmark-alist nil)
@@ -1678,7 +1682,8 @@ for a file, defaulting to the file defined by variable
 	;; Rather than a single call to `pp' we make one per bookmark.
 	;; Apparently `pp' has a poor algorithmic complexity, so this
 	;; scales a lot better.  bug#4485.
-	(dolist (i bookmark-alist) (pp i (current-buffer)))
+	(let ((pp-default-function #'pp-28))
+	  (dolist (i bookmark-alist) (pp i (current-buffer))))
 	(insert ")\n")
 	;; Make sure the specified encoding can safely encode the
 	;; bookmarks.  If it cannot, suggest utf-8-emacs as default.
@@ -2062,7 +2067,7 @@ At any time you may use \\[revert-buffer] to go back to sorting by creation orde
         `[("" 1) ;; Space to add "*" for bookmark with annotation
           ("Bookmark Name"
            ,bookmark-bmenu-file-column bookmark-bmenu--name-predicate)
-          ("Type" 8 bookmark-bmenu--type-predicate)
+          ("Type" ,bookmark-bmenu-type-column-width bookmark-bmenu--type-predicate)
           ,@(if bookmark-bmenu-toggle-filenames
                 '(("File" 0 bookmark-bmenu--file-predicate)))])
   (setq tabulated-list-padding bookmark-bmenu-marks-width)
@@ -2561,37 +2566,37 @@ strings returned are not."
 ;;;###autoload
 (defvar menu-bar-bookmark-map
   (let ((map (make-sparse-keymap "Bookmark functions")))
-    (bindings--define-key map [load]
+    (define-key map [load]
       '(menu-item "Load a Bookmark File..." bookmark-load
 		  :help "Load bookmarks from a bookmark file)"))
-    (bindings--define-key map [write]
+    (define-key map [write]
       '(menu-item "Save Bookmarks As..." bookmark-write
 		  :help "Write bookmarks to a file (reading the file name with the minibuffer)"))
-    (bindings--define-key map [save]
+    (define-key map [save]
       '(menu-item "Save Bookmarks" bookmark-save
 		  :help "Save currently defined bookmarks"))
-    (bindings--define-key map [edit]
+    (define-key map [edit]
       '(menu-item "Edit Bookmark List" bookmark-bmenu-list
 		  :help "Display a list of existing bookmarks"))
-    (bindings--define-key map [delete]
+    (define-key map [delete]
       '(menu-item "Delete Bookmark..." bookmark-delete
 		  :help "Delete a bookmark from the bookmark list"))
-    (bindings--define-key map [delete-all]
+    (define-key map [delete-all]
       '(menu-item "Delete all Bookmarks..." bookmark-delete-all
 		  :help "Delete all bookmarks from the bookmark list"))
-    (bindings--define-key map [rename]
+    (define-key map [rename]
       '(menu-item "Rename Bookmark..." bookmark-rename
 		  :help "Change the name of a bookmark"))
-    (bindings--define-key map [locate]
+    (define-key map [locate]
       '(menu-item "Insert Location..." bookmark-locate
 		  :help "Insert the name of the file associated with a bookmark"))
-    (bindings--define-key map [insert]
+    (define-key map [insert]
       '(menu-item "Insert Contents..." bookmark-insert
 		  :help "Insert the text of the file pointed to by a bookmark"))
-    (bindings--define-key map [set]
+    (define-key map [set]
       '(menu-item "Set Bookmark..." bookmark-set
 		  :help "Set a bookmark named inside a file."))
-    (bindings--define-key map [jump]
+    (define-key map [jump]
       '(menu-item "Jump to Bookmark..." bookmark-jump
 		  :help "Jump to a bookmark (a point in some file)"))
     map))

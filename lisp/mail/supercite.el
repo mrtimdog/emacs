@@ -1,6 +1,6 @@
 ;;; supercite.el --- minor mode for citing mail and news replies  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1993-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2025 Free Software Foundation, Inc.
 
 ;; Author: 1993 Barry A. Warsaw <bwarsaw@python.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -236,7 +236,7 @@ See the variable `sc-cite-frame-alist' for details."
   :group 'supercite-frames)
 
 (defcustom sc-cite-region-limit t
-  "This variable controls automatic citation of yanked text.
+  "Size limit for automatic citation of yanked text.
 Valid values are:
 
 non-nil   -- cite the entire region, regardless of its size
@@ -596,7 +596,7 @@ selected letter is returned, or nil if the question was not answered.
 Note that WORD is a string and LETTER is a character.  All LETTERs in
 the list should be unique."
   (let* ((prompt (concat
-		  (mapconcat (lambda (elt) (car elt)) alist ", ")
+                  (mapconcat #'car alist ", ")
 		  "? ("
 		  (mapconcat
 		   (lambda (elt) (char-to-string (cdr elt))) alist "/")

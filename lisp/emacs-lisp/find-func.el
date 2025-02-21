@@ -1,6 +1,6 @@
 ;;; find-func.el --- find the definition of the Emacs Lisp function near point  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997, 1999, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Jens Petersen <petersen@kurims.kyoto-u.ac.jp>
 ;; Keywords: emacs-lisp, functions, variables
@@ -123,15 +123,6 @@ should insert the feature name."
   :group 'xref
   :version "25.1")
 
-(defcustom find-ert-deftest-regexp
-  "(ert-deftest +'%s"
-  "The regexp used to search for an `ert-deftest' definition.
-Note it must contain a `%s' at the place where `format'
-should insert the feature name."
-  :type 'regexp
-  :group 'xref
-  :version "29.1")
-
 (defun find-function--defface (symbol)
   (catch 'found
     (while (re-search-forward (format find-face-regexp symbol) nil t)
@@ -145,14 +136,17 @@ should insert the feature name."
     (defvar . find-variable-regexp)
     (defface . find-function--defface)
     (feature . find-feature-regexp)
-    (defalias . find-alias-regexp)
-    (ert-deftest . find-ert-deftest-regexp))
+    (defalias . find-alias-regexp))
   "Alist mapping definition types into regexp variables.
 Each regexp variable's value should actually be a format string
 to be used to substitute the desired symbol name into the regexp.
 Instead of regexp variable, types can be mapped to functions as well,
 in which case the function is called with one argument (the object
-we're looking for) and it should search for it.")
+we're looking for) and it should search for it.
+
+Symbols can have their own version of this alist on
+the property `find-function-type-alist'.
+See the function `find-function-update-type-alist'.")
 (put 'find-function-regexp-alist 'risky-local-variable t)
 
 (define-obsolete-variable-alias 'find-function-source-path
@@ -400,9 +394,12 @@ See `find-library' for more details."
 Visit the library in a buffer, and return a cons cell (BUFFER . POSITION),
 or just (BUFFER . nil) if the definition can't be found in the file.
 
-If TYPE is nil, look for a function definition.
-Otherwise, TYPE specifies the kind of definition,
-and it is interpreted via `find-function-regexp-alist'.
+If TYPE is nil, look for a function definition,
+otherwise, TYPE specifies the kind of definition.
+TYPE is looked up in SYMBOL's property `find-function-type-alist'
+(which can be maintained with `find-function-update-type-alist')
+or the variable `find-function-regexp-alist'.
+
 The search is done in the source for library LIBRARY."
   (if (null library)
       (error "Don't know where `%s' is defined" symbol))
@@ -419,7 +416,10 @@ The search is done in the source for library LIBRARY."
     (when (string-match "\\.emacs\\(.el\\)\\'" library)
       (setq library (substring library 0 (match-beginning 1))))
     (let* ((filename (find-library-name library))
-	   (regexp-symbol (cdr (assq type find-function-regexp-alist))))
+	   (regexp-symbol
+            (or (and (symbolp symbol)
+                     (alist-get type (get symbol 'find-function-type-alist)))
+                (alist-get type find-function-regexp-alist))))
       (with-current-buffer (find-file-noselect filename)
 	(let ((regexp (if (functionp regexp-symbol) regexp-symbol
                         (format (symbol-value regexp-symbol)
@@ -460,6 +460,13 @@ The search is done in the source for library LIBRARY."
                 (cons (current-buffer)
                       (find-function--search-by-expanding-macros
                        (current-buffer) symbol type))))))))))
+
+;;;###autoload
+(defun find-function-update-type-alist (symbol type variable)
+  "Update SYMBOL property `find-function-type-alist' with (TYPE . VARIABLE).
+Property `find-function-type-alist' is a symbol-specific version
+of variable `find-function-regexp-alist' and has the same format."
+  (setf (alist-get type (get symbol 'find-function-type-alist)) variable))
 
 (defun find-function--try-macroexpand (form)
   "Try to macroexpand FORM in full or partially.

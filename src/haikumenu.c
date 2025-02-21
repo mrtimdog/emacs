@@ -1,5 +1,5 @@
 /* Haiku window system support
-   Copyright (C) 2021-2024 Free Software Foundation, Inc.
+   Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -786,7 +786,7 @@ the position of the last non-menu event instead.  */)
       popup_activated_p += 1;
     }
   else
-    return call2 (Qpopup_menu, call0 (Qmouse_menu_bar_map),
+    return calln (Qpopup_menu, calln (Qmouse_menu_bar_map),
 		  last_nonmenu_event);
 
   return Qnil;

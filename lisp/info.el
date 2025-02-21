@@ -1,6 +1,6 @@
 ;;; info.el --- Info package for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1992-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help
@@ -830,7 +830,7 @@ Select the window used, if it has been made."
       (select-window window))))
 
 
-;;;###autoload (put 'info 'info-file (purecopy "emacs"))
+;;;###autoload (put 'info 'info-file "emacs")
 ;;;###autoload
 (defun info (&optional file-or-node buffer)
   "Enter Info, the documentation browser.
@@ -1817,12 +1817,10 @@ escaped (\\\",\\\\)."
 	(Info-hide-cookies-node)
 	(run-hooks 'Info-selection-hook)))))
 
-(defvar Info-mode-line-node-keymap
-  (let ((map (make-sparse-keymap)))
-    (define-key map [mode-line mouse-1] 'Info-mouse-scroll-up)
-    (define-key map [mode-line mouse-3] 'Info-mouse-scroll-down)
-    map)
-  "Keymap to put on the Info node name in the mode line.")
+(defvar-keymap Info-mode-line-node-keymap
+  :doc "Keymap to put on the Info node name in the mode line."
+  "<mode-line> <mouse-1>" #'Info-mouse-scroll-up
+  "<mode-line> <mouse-3>" #'Info-mouse-scroll-down)
 
 (defun Info-set-mode-line ()
   (setq mode-line-buffer-identification
@@ -3989,7 +3987,7 @@ with a list of packages that contain all specified keywords."
      (require 'finder)
      (list
       (completing-read-multiple
-       "Keywords (separated by comma): "
+       "Keywords: "
        (mapcar #'symbol-name (mapcar #'car (append finder-known-keywords
                                                    (finder-unknown-keywords))))
        nil t))))
@@ -4680,7 +4678,6 @@ Advanced commands:
     ("java" . "ccmode") ("idl" . "ccmode") ("pike" . "ccmode")
     ("skeleton" . "autotype") ("auto-insert" . "autotype")
     ("copyright" . "autotype") ("executable" . "autotype")
-    ("time-stamp" . "autotype")
     ("tempo" . "autotype") ("hippie-expand" . "autotype")
     ("cvs" . "pcl-cvs") ("ada" . "ada-mode") "calc"
     ("calcAlg" . "calc") ("calcDigit" . "calc") ("calcVar" . "calc")
@@ -4757,7 +4754,7 @@ in the first element of the returned list (which is treated specially in
 	      (cdr where))
       where)))
 
-;;;###autoload (put 'Info-goto-emacs-command-node 'info-file (purecopy "emacs"))
+;;;###autoload (put 'Info-goto-emacs-command-node 'info-file "emacs")
 ;;;###autoload
 (defun Info-goto-emacs-command-node (command)
   "Go to the Info node in the Emacs manual for command COMMAND.
@@ -4799,7 +4796,7 @@ COMMAND must be a symbol or string."
 			 (if (> num-matches 2) "them" "it")))))
       (error "Couldn't find documentation for %s" command))))
 
-;;;###autoload (put 'Info-goto-emacs-key-command-node 'info-file (purecopy "emacs"))
+;;;###autoload (put 'Info-goto-emacs-key-command-node 'info-file "emacs")
 ;;;###autoload
 (defun Info-goto-emacs-key-command-node (key)
   "Go to the node in the Emacs manual which describes the command bound to KEY.
@@ -4833,17 +4830,15 @@ the variable `Info-file-list-for-emacs'."
               "\\`%s' invokes an anonymous command defined with `lambda'"
               (key-description key))))))))
 
-(defvar Info-link-keymap
-  (let ((keymap (make-sparse-keymap)))
-    (define-key keymap [header-line down-mouse-1] 'mouse-drag-header-line)
-    (define-key keymap [header-line mouse-1] 'Info-mouse-follow-link)
-    (define-key keymap [header-line mouse-2] 'Info-mouse-follow-link)
-    (define-key keymap [mouse-2] 'Info-mouse-follow-link)
-    (define-key keymap [follow-link] 'mouse-face)
-    keymap)
-  "Keymap to put on Info links.
+(defvar-keymap Info-link-keymap
+  :doc "Keymap to put on Info links.
 This is used for the \"Next\", \"Prev\", and \"Up\" links in the
-first line or header line, and for breadcrumb links.")
+first line or header line, and for breadcrumb links."
+  "<header-line> <down-mouse-1>" #'mouse-drag-header-line
+  "<header-line> <mouse-1>"      #'Info-mouse-follow-link
+  "<header-line> <mouse-2>"      #'Info-mouse-follow-link
+  "<mouse-2>"                    #'Info-mouse-follow-link
+  "<follow-link>"                'mouse-face)
 
 (defun Info-breadcrumbs ()
   (let ((nodes (Info-toc-nodes Info-current-file))

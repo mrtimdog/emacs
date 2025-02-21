@@ -1,6 +1,6 @@
 ;;; rx-tests.el --- tests for rx.el              -*- lexical-binding: t -*-
 
-;; Copyright (C) 2016-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2016-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -485,11 +485,18 @@
     (should (equal (rx "" (regexp x) (eval ""))
                    "a*"))))
 
+(eval-when-compile
+  (defvar rx-tests--x "LEX")
+  (defun rx-tests--get-x () rx-tests--x))
+
 (ert-deftest rx-eval ()
   (should (equal (rx (eval (list 'syntax 'symbol)))
                  "\\s_"))
   (should (equal (rx "a" (eval (concat)) "b")
-                 "ab")))
+                 "ab"))
+  (should (equal (rx (eval (funcall (lambda (rx-tests--x) (rx-tests--get-x))
+                                    "DYN")))
+                 "LEX")))
 
 (ert-deftest rx-literal ()
   (should (equal (rx (literal "$a"))

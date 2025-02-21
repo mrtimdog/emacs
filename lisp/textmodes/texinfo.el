@@ -1,6 +1,6 @@
 ;;; texinfo.el --- major mode for editing Texinfo files  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985, 1988-1993, 1996-1997, 2000-2024 Free Software
+;; Copyright (C) 1985, 1988-1993, 1996-1997, 2000-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Robert J. Chassell
@@ -61,12 +61,12 @@
   :group 'docs)
 
 ;;;###autoload
-(defcustom texinfo-open-quote (purecopy "``")
+(defcustom texinfo-open-quote "``"
   "String inserted by typing \\[texinfo-insert-quote] to open a quotation."
   :type 'string)
 
 ;;;###autoload
-(defcustom texinfo-close-quote (purecopy "''")
+(defcustom texinfo-close-quote "''"
   "String inserted by typing \\[texinfo-insert-quote] to close a quotation."
   :type 'string)
 

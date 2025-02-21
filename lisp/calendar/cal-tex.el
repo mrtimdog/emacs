@@ -1,6 +1,6 @@
 ;;; cal-tex.el --- calendar functions for printing calendars with LaTeX  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1995, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Steve Fisk <fisk@bowdoin.edu>
 ;;         Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -1295,7 +1295,7 @@ Optional EVENT indicates a buffer position to use instead of point."
     (cal-tex-b-document)
     (cal-tex-cmd "\\pagestyle" "empty")
     (dotimes (i n)
-      (if (zerop (mod i 2))
+      (if (evenp i)
           (insert "\\righthead")
         (insert "\\lefthead"))
       (cal-tex-arg
@@ -1318,7 +1318,7 @@ Optional EVENT indicates a buffer position to use instead of point."
                       (calendar-extract-year d))))))
       (insert "%\n")
       (dotimes (_jdummy 7)
-        (if (zerop (mod i 2))
+        (if (evenp i)
             (insert "\\rightday")
           (insert "\\leftday"))
         (cal-tex-arg (cal-tex-LaTeXify-string (calendar-day-name date)))
@@ -1388,7 +1388,7 @@ Optional EVENT indicates a buffer position to use instead of point."
     (cal-tex-cmd "\\pagestyle" "empty")
     (dotimes (i n)
       (dotimes (j 4)
-        (let ((even (zerop (% j 2))))
+        (let ((even (evenp j)))
           (insert (if even
                       "\\righthead"
                     "\\lefthead"))
@@ -1600,7 +1600,7 @@ FINAL-SEPARATOR is non-nil."
   (or separator (setq separator "\\\\"))
   (let (result)
     (setq result
-          (mapconcat (lambda (x) (cal-tex-LaTeXify-string x))
+          (mapconcat #'cal-tex-LaTeXify-string
                      (dolist (d date-list (reverse result))
                        (and (car d)
                             (calendar-date-equal date (car d))

@@ -1,6 +1,6 @@
 ;;; message.el --- composing mail and news messages -*- lexical-binding: t -*-
 
-;; Copyright (C) 1996-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: mail, news
@@ -112,6 +112,13 @@
   "Faces used for message composing."
   :group 'message
   :group 'faces)
+
+(defcustom message-header-use-obsolete-in-reply-to nil
+  "Include extra information in the In-Reply-To header.
+This form has been obsolete since RFC 2822."
+  :group 'message-headers
+  :version "31.1"
+  :type 'boolean)
 
 (defcustom message-directory "~/Mail/"
   "Directory from which all other mail file variables are derived."
@@ -305,11 +312,20 @@ any confusion."
 		 regexp))
 
 (defcustom message-subject-re-regexp
-  "^[ \t]*\\([Rr][Ee]\\(\\[[0-9]*\\]\\)* ?:[ \t]*\\)*[ \t]*"
-  "Regexp matching \"Re: \" in the subject line."
+  (mail--wrap-re-regexp
+   (concat
+    "\\("
+    (string-join mail-re-regexps "\\|")
+    "\\)"))
+  "Regexp matching \"Re: \" in the subject line.
+Matching is done case-insensitively.
+Initialized from the value of `mail-re-regexps', which is easier to
+customize."
   :group 'message-various
   :link '(custom-manual "(message)Message Headers")
-  :type 'regexp)
+  :type 'regexp
+  :set-after '(mail-re-regexps)
+  :version "31.1")
 
 (defcustom message-screenshot-command '("import" "png:-")
   "Command to take a screenshot.
@@ -1520,24 +1536,24 @@ starting with `not' and followed by regexps."
 (defface message-header-to
   '((((class color)
       (background dark))
-     :foreground "DarkOliveGreen1" :bold t)
+     :foreground "DarkOliveGreen1" :weight bold)
     (((class color)
       (background light))
-     :foreground "MidnightBlue" :bold t)
+     :foreground "MidnightBlue" :weight bold)
     (t
-     :bold t :italic t))
+     :weight bold :slant italic))
   "Face used for displaying To headers."
   :group 'message-faces)
 
 (defface message-header-cc
   '((((class color)
       (background dark))
-     :foreground "chartreuse1" :bold t)
+     :foreground "chartreuse1" :weight bold)
     (((class color)
       (background light))
      :foreground "MidnightBlue")
     (t
-     :bold t))
+     :weight bold))
   "Face used for displaying Cc headers."
   :group 'message-faces)
 
@@ -1547,21 +1563,21 @@ starting with `not' and followed by regexps."
      :foreground "OliveDrab1")
     (((class color)
       (background light))
-     :foreground "navy blue" :bold t)
+     :foreground "navy blue" :weight bold)
     (t
-     :bold t))
+     :weight bold))
   "Face used for displaying Subject headers."
   :group 'message-faces)
 
 (defface message-header-newsgroups
   '((((class color)
       (background dark))
-     :foreground "yellow" :bold t :italic t)
+     :foreground "yellow" :weight bold :slant italic)
     (((class color)
       (background light))
-     :foreground "blue4" :bold t :italic t)
+     :foreground "blue4" :weight bold :slant italic)
     (t
-     :bold t :italic t))
+     :weight bold :slant italic))
   "Face used for displaying Newsgroups headers."
   :group 'message-faces)
 
@@ -1573,7 +1589,7 @@ starting with `not' and followed by regexps."
       (background light))
      :foreground "steel blue")
     (t
-     :bold t :italic t))
+     :weight bold :slant italic))
   "Face used for displaying other headers."
   :group 'message-faces)
 
@@ -1585,7 +1601,7 @@ starting with `not' and followed by regexps."
       (background light))
      :foreground "cornflower blue")
     (t
-     :bold t))
+     :weight bold))
   "Face used for displaying header names."
   :group 'message-faces)
 
@@ -1597,7 +1613,7 @@ starting with `not' and followed by regexps."
       (background light))
      :foreground "blue")
     (t
-     :bold t))
+     :weight bold))
   "Face used for displaying X-Header headers."
   :group 'message-faces)
 
@@ -1609,7 +1625,7 @@ starting with `not' and followed by regexps."
       (background light))
      :foreground "brown")
     (t
-     :bold t))
+     :weight bold))
   "Face used for displaying the separator."
   :group 'message-faces)
 
@@ -1621,7 +1637,7 @@ starting with `not' and followed by regexps."
       (background light))
      (:foreground "red1"))
     (t
-     (:bold t)))
+     (:weight bold)))
   "Face used for displaying 1st-level cited text."
   :group 'message-faces)
 
@@ -1633,7 +1649,7 @@ starting with `not' and followed by regexps."
       (background light))
      (:foreground "red4"))
     (t
-     (:bold t)))
+     (:weight bold)))
   "Face used for displaying 2nd-level cited text."
   :group 'message-faces)
 
@@ -1645,7 +1661,7 @@ starting with `not' and followed by regexps."
       (background light))
      (:foreground "OliveDrab4"))
     (t
-     (:bold t)))
+     (:weight bold)))
   "Face used for displaying 3rd-level cited text."
   :group 'message-faces)
 
@@ -1657,7 +1673,7 @@ starting with `not' and followed by regexps."
       (background light))
      (:foreground "SteelBlue4"))
     (t
-     (:bold t)))
+     (:weight bold)))
   "Face used for displaying 4th-level cited text."
   :group 'message-faces)
 
@@ -1673,11 +1689,11 @@ starting with `not' and followed by regexps."
       (background light))
      :foreground "ForestGreen")
     (t
-     :bold t))
+     :weight bold))
   "Face used for displaying MML."
   :group 'message-faces)
 
-(defface message-signature-separator '((t :bold t))
+(defface message-signature-separator '((t :weight bold))
   "Face used for displaying the signature separator."
   :group 'message-faces
   :version "28.1")
@@ -2257,10 +2273,12 @@ see `message-narrow-to-headers-or-head'."
       subject)))
 
 (defun message-strip-subject-re (subject)
-  "Remove \"Re:\" from subject lines in string SUBJECT."
-  (if (string-match message-subject-re-regexp subject)
-      (substring subject (match-end 0))
-    subject))
+  "Remove \"Re:\" from subject lines in string SUBJECT.
+This uses `mail-re-regexps', matching is done case-insensitively."
+  (let ((case-fold-search t))
+    (if (string-match message-subject-re-regexp subject)
+        (substring subject (match-end 0))
+      subject)))
 
 (defcustom message-replacement-char "."
   "Replacement character used instead of unprintable or not decodable chars."
@@ -2965,33 +2983,38 @@ Consider adding this function to `message-header-setup-hook'"
 
   "M-n" #'message-display-abbrev)
 
-(easy-menu-define
-  message-mode-menu message-mode-map "Message Menu."
+(easy-menu-define message-mode-menu message-mode-map
+  "Message Menu."
   '("Message"
-    ["Yank Original" message-yank-original message-reply-buffer]
-    ["Fill Yanked Message" message-fill-yanked-message t]
-    ["Insert Signature" message-insert-signature t]
-    ["Caesar (rot13) Message" message-caesar-buffer-body t]
-    ["Caesar (rot13) Region" message-caesar-region mark-active]
+    ["Yank Original" message-yank-original
+     :active message-reply-buffer]
+    ["Fill Yanked Message" message-fill-yanked-message]
+    ["Insert Signature" message-insert-signature]
+    ["Caesar (rot13) Message" message-caesar-buffer-body]
+    ["Caesar (rot13) Region" message-caesar-region
+     :active mark-active]
     ["Elide Region" message-elide-region
      :active mark-active
      :help "Replace text in region with an ellipsis"]
     ["Delete Outside Region" message-delete-not-region
      :active mark-active
      :help "Delete all quoted text outside region"]
-    ["Kill To Signature" message-kill-to-signature t]
-    ["Newline and Reformat" message-newline-and-reformat t]
-    ["Rename buffer" message-rename-buffer t]
-    ["Spellcheck" ispell-message :help "Spellcheck this message"]
+    ["Kill To Signature" message-kill-to-signature]
+    ["Newline and Reformat" message-newline-and-reformat]
+    ["Rename buffer" message-rename-buffer]
+    ["Spellcheck" ispell-message
+     :help "Spellcheck this message"]
     "----"
     ["Insert Region Marked" message-mark-inserted-region
-     :active mark-active :help "Mark region with enclosing tags"]
+     :active mark-active
+     :help "Mark region with enclosing tags"]
     ["Insert File Marked..." message-mark-insert-file
      :help "Insert file at point marked with enclosing tags"]
-    ["Attach File..." mml-attach-file t]
-    ["Insert Screenshot" message-insert-screenshot t]
+    ["Attach File..." mml-attach-file]
+    ["Insert Screenshot" message-insert-screenshot]
     "----"
-    ["Send Message" message-send-and-exit :help "Send this message"]
+    ["Send Message" message-send-and-exit
+     :help "Send this message"]
     ["Postpone Message" message-dont-send
      :help "File this draft message and exit"]
     ["Send at Specific Time..." gnus-delay-article
@@ -2999,38 +3022,37 @@ Consider adding this function to `message-header-setup-hook'"
     ["Kill Message" message-kill-buffer
      :help "Delete this message without sending"]
     "----"
-    ["Message manual" message-info :help "Display the Message manual"]))
+    ["Message manual" message-info
+     :help "Display the Message manual"]))
 
-(easy-menu-define
-  message-mode-field-menu message-mode-map ""
+(easy-menu-define message-mode-field-menu message-mode-map
+  "Field Menu."
   '("Field"
-    ["To" message-goto-to t]
-    ["From" message-goto-from t]
-    ["Subject" message-goto-subject t]
-    ["Change subject..." message-change-subject t]
-    ["Cc" message-goto-cc t]
-    ["Bcc" message-goto-bcc t]
-    ["Fcc" message-goto-fcc t]
-    ["Reply-To" message-goto-reply-to t]
+    ["To" message-goto-to]
+    ["From" message-goto-from]
+    ["Subject" message-goto-subject]
+    ["Change subject..." message-change-subject]
+    ["Cc" message-goto-cc]
+    ["Bcc" message-goto-bcc]
+    ["Fcc" message-goto-fcc]
+    ["Reply-To" message-goto-reply-to]
     ["Flag As Important" message-insert-importance-high
      :help "Mark this message as important"]
     ["Flag As Unimportant" message-insert-importance-low
      :help "Mark this message as unimportant"]
-    ["Request Receipt"
-     message-insert-disposition-notification-to
+    ["Request Receipt" message-insert-disposition-notification-to
      :help "Request a receipt notification"]
     "----"
     ;; (typical) news stuff
-    ["Summary" message-goto-summary t]
-    ["Keywords" message-goto-keywords t]
-    ["Newsgroups" message-goto-newsgroups t]
-    ["Fetch Newsgroups" message-insert-newsgroups t]
-    ["Followup-To" message-goto-followup-to t]
-    ;; ["Followup-To (with note in body)" message-cross-post-followup-to t]
-    ["Crosspost / Followup-To..." message-cross-post-followup-to t]
-    ["Distribution" message-goto-distribution t]
-    ["Expires" message-insert-expires t ]
-    ["X-No-Archive" message-add-archive-header t ]
+    ["Summary" message-goto-summary]
+    ["Keywords" message-goto-keywords]
+    ["Newsgroups" message-goto-newsgroups]
+    ["Fetch Newsgroups" message-insert-newsgroups]
+    ["Followup-To" message-goto-followup-to]
+    ["Crosspost / Followup-To..." message-cross-post-followup-to]
+    ["Distribution" message-goto-distribution]
+    ["Expires" message-insert-expires]
+    ["X-No-Archive" message-add-archive-header]
     "----"
     ;; (typical) mailing-lists stuff
     ["Fetch To" message-insert-to
@@ -3038,18 +3060,18 @@ Consider adding this function to `message-header-setup-hook'"
     ["Fetch To and Cc" message-insert-wide-reply
      :help "Insert To and Cc headers as if you were doing a wide reply."]
     "----"
-    ["Send to list only" message-to-list-only t]
-    ["Mail-Followup-To" message-goto-mail-followup-to t]
+    ["Send to list only" message-to-list-only]
+    ["Mail-Followup-To" message-goto-mail-followup-to]
     ["Unsubscribed list post" message-generate-unsubscribed-mail-followup-to
      :help "Insert a reasonable `Mail-Followup-To:' header."]
-    ["Reduce To: to Cc:" message-reduce-to-to-cc t]
+    ["Reduce To: to Cc:" message-reduce-to-to-cc]
     "----"
-    ["Sort Headers" message-sort-headers t]
-    ["Encode non-ASCII domain names" message-idna-to-ascii-rhs t]
+    ["Sort Headers" message-sort-headers]
+    ["Encode non-ASCII domain names" message-idna-to-ascii-rhs]
     ;; We hide `message-hidden-headers' by narrowing the buffer.
-    ["Show Hidden Headers" message-widen-and-recenter t]
-    ["Goto Body" message-goto-body t]
-    ["Goto Signature" message-goto-signature t]))
+    ["Show Hidden Headers" message-widen-and-recenter]
+    ["Goto Body" message-goto-body]
+    ["Goto Signature" message-goto-signature]))
 
 (defvar message-tool-bar-map nil)
 
@@ -3253,79 +3275,79 @@ Like `text-mode', but with these additional commands:
 ;;; Movement commands
 
 (defun message-goto-to ()
-  "Move point to the To header."
+  "Move point to the To header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "To"))
 
 (defun message-goto-from ()
-  "Move point to the From header."
+  "Move point to the From header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "From"))
 
 (defun message-goto-subject ()
-  "Move point to the Subject header."
+  "Move point to the Subject header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Subject"))
 
 (defun message-goto-cc ()
-  "Move point to the Cc header."
+  "Move point to the Cc header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Cc" "To"))
 
 (defun message-goto-bcc ()
-  "Move point to the Bcc  header."
+  "Move point to the Bcc  header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Bcc" "Cc" "To"))
 
 (defun message-goto-fcc ()
-  "Move point to the Fcc header."
+  "Move point to the Fcc header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Fcc" "To" "Newsgroups"))
 
 (defun message-goto-reply-to ()
-  "Move point to the Reply-To header."
+  "Move point to the Reply-To header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Reply-To" "Subject"))
 
 (defun message-goto-newsgroups ()
-  "Move point to the Newsgroups header."
+  "Move point to the Newsgroups header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Newsgroups"))
 
 (defun message-goto-distribution ()
-  "Move point to the Distribution header."
+  "Move point to the Distribution header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Distribution"))
 
 (defun message-goto-followup-to ()
-  "Move point to the Followup-To header."
+  "Move point to the Followup-To header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Followup-To" "Newsgroups"))
 
 (defun message-goto-mail-followup-to ()
-  "Move point to the Mail-Followup-To header."
+  "Move point to the Mail-Followup-To header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Mail-Followup-To" "To"))
 
 (defun message-goto-keywords ()
-  "Move point to the Keywords header."
+  "Move point to the Keywords header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Keywords" "Subject"))
 
 (defun message-goto-summary ()
-  "Move point to the Summary header."
+  "Move point to the Summary header or insert an empty one."
   (interactive nil message-mode)
   (push-mark)
   (message-position-on-field "Summary" "Subject"))
@@ -4249,6 +4271,10 @@ This function strips off the signature from the original message."
     (newline)))
 
 (defun message-position-on-field (header &rest afters)
+  "Move point to header HEADER or insert it if not found.
+
+If HEADER is not present, insert it with an empty value, after any
+headers specified in AFTERS."
   (let ((case-fold-search t))
     (save-restriction
       (narrow-to-region
@@ -4900,7 +4926,7 @@ If you always want Gnus to send messages in one piece, set
 		 message-required-mail-headers))
 	;; otherwise, delete the MFT header if the field is empty
 	(when (equal "" (mail-fetch-field "mail-followup-to"))
-	  (message-remove-header "^Mail-Followup-To:")))
+	  (message-remove-header "Mail-Followup-To")))
       ;; Insert some headers.
       (let ((message-deletable-headers
 	     (if news nil message-deletable-headers)))
@@ -5989,35 +6015,38 @@ In posting styles use `(\"Expires\" (make-expires-date 30))'."
   "Return the In-Reply-To header for this message."
   (when message-reply-headers
     (let ((from (mail-header-from message-reply-headers))
-	  (date (mail-header-date message-reply-headers))
-	  (msg-id (mail-header-id message-reply-headers)))
+          (date (mail-header-date message-reply-headers))
+          (msg-id (mail-header-id message-reply-headers)))
       (when from
-	(let ((name (mail-extract-address-components from)))
-	  (concat
-	   msg-id (if msg-id " (")
-	   (if (car name)
-	       (if (string-match "[^[:ascii:]]" (car name))
-		   ;; Quote a string containing non-ASCII characters.
-		   ;; It will make the RFC2047 encoder cause an error
-		   ;; if there are special characters.
-                   (mm-with-multibyte-buffer
-                     (insert (car name))
-                     (goto-char (point-min))
-                     (while (search-forward "\"" nil t)
-                       (when (prog2
-                                 (backward-char)
-                                 (zerop (% (skip-chars-backward "\\\\") 2))
-                               (goto-char (match-beginning 0)))
-                         (insert "\\"))
-                       (forward-char))
-                     ;; Those quotes will be removed by the RFC2047 encoder.
-                     (concat "\"" (buffer-string) "\""))
-		 (car name))
-	     (nth 1 name))
-	   "'s message of \""
-	   (if (or (not date) (string= date ""))
-	       "(unknown date)" date)
-	   "\"" (if msg-id ")")))))))
+        (let ((name (mail-extract-address-components from)))
+          (concat
+           msg-id
+           (when message-header-use-obsolete-in-reply-to
+             (concat
+              (if msg-id " (")
+              (if (car name)
+                  (if (string-match "[^[:ascii:]]" (car name))
+                      ;; Quote a string containing non-ASCII characters.
+                      ;; It will make the RFC2047 encoder cause an error
+                      ;; if there are special characters.
+                      (mm-with-multibyte-buffer
+                        (insert (car name))
+                        (goto-char (point-min))
+                        (while (search-forward "\"" nil t)
+                          (when (prog2
+                                    (backward-char)
+                                    (evenp (skip-chars-backward "\\\\"))
+                                  (goto-char (match-beginning 0)))
+                            (insert "\\"))
+                          (forward-char))
+                        ;; Those quotes will be removed by the RFC2047 encoder.
+                        (concat "\"" (buffer-string) "\""))
+                    (car name))
+                (nth 1 name))
+              "'s message of \""
+              (if (or (not date) (string= date ""))
+                  "(unknown date)" date)
+              "\"" (if msg-id ")")))))))))
 
 (defun message-make-distribution ()
   "Make a Distribution header."

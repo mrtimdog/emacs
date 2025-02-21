@@ -1,7 +1,7 @@
 ;;; derived.el --- allow inheritance of major modes  -*- lexical-binding: t; -*-
 ;; (formerly mode-clone.el)
 
-;; Copyright (C) 1993-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2025 Free Software Foundation, Inc.
 
 ;; Author: David Megginson <dmeggins@aix1.uottawa.ca>
 ;; Maintainer: emacs-devel@gnu.org
@@ -220,7 +220,7 @@ No problems result if this variable is not bound.
        (with-no-warnings (defvar ,map (make-sparse-keymap)))
        (unless (get ',map 'variable-documentation)
 	 (put ',map 'variable-documentation
-	      (purecopy ,(format "Keymap for `%s'." child))))
+              ,(format "Keymap for `%s'." child)))
        ,(if declare-syntax
 	    `(progn
                (defvar ,syntax)
@@ -229,7 +229,7 @@ No problems result if this variable is not bound.
 		 (defvar ,syntax (make-syntax-table)))
 	       (unless (get ',syntax 'variable-documentation)
 		 (put ',syntax 'variable-documentation
-		      (purecopy ,(format "Syntax table for `%s'." child))))))
+                      ,(format "Syntax table for `%s'." child)))))
        ,(if declare-abbrev
 	    `(progn
                (defvar ,abbrev)
@@ -239,7 +239,7 @@ No problems result if this variable is not bound.
 		   (progn (define-abbrev-table ',abbrev nil) ,abbrev)))
 	       (unless (get ',abbrev 'variable-documentation)
 		 (put ',abbrev 'variable-documentation
-		      (purecopy ,(format "Abbrev table for `%s'." child))))))
+                      ,(format "Abbrev table for `%s'." child)))))
        (if (fboundp 'derived-mode-set-parent) ;; Emacs≥30.1
            (derived-mode-set-parent ',child ',parent)
          (put ',child 'derived-mode-parent ',parent))

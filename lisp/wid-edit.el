@@ -1,6 +1,6 @@
 ;; wid-edit.el --- Functions for creating and using widgets -*- lexical-binding:t -*-
 ;;
-;; Copyright (C) 1996-1997, 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 1999-2025 Free Software Foundation, Inc.
 ;;
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -416,6 +416,9 @@ the :notify function can't know the new value.")
       ;; character (so we don't do this for the character widget),
       ;; or if the size of the editable field isn't specified.
       (let ((overlay (make-overlay (1- to) to nil t nil)))
+        ;; Save it so that we can easily delete it in
+        ;; `widget-field-value-delete'.  (Bug#75646)
+        (widget-put widget :field-end-overlay overlay)
 	(overlay-put overlay 'field 'boundary)
         ;; We need the real field for tabbing.
 	(overlay-put overlay 'real-field widget)
@@ -459,17 +462,20 @@ the :notify function can't know the new value.")
   "Specify button for WIDGET between FROM and TO."
   (let ((overlay (make-overlay from to nil t nil))
 	(follow-link (widget-get widget :follow-link))
-	(help-echo (widget-get widget :help-echo)))
+	(help-echo (widget-get widget :help-echo))
+	(face (unless (widget-get widget :suppress-face)
+		(widget-apply widget :button-face-get))))
     (widget-put widget :button-overlay overlay)
     (when (functionp help-echo)
       (setq help-echo 'widget-mouse-help))
-    (overlay-put overlay 'before-string #(" " 0 1 (invisible t)))
+    (overlay-put overlay 'before-string
+                 (propertize " " 'invisible t 'face face))
     (overlay-put overlay 'button widget)
     (overlay-put overlay 'keymap (widget-get widget :keymap))
     (overlay-put overlay 'evaporate t)
     ;; We want to avoid the face with image buttons.
-    (unless (widget-get widget :suppress-face)
-      (overlay-put overlay 'face (widget-apply widget :button-face-get))
+    (when face
+      (overlay-put overlay 'face face)
       (overlay-put overlay 'mouse-face
 		   ;; Make new list structure for the mouse-face value
 		   ;; so that different widgets will have
@@ -1724,6 +1730,49 @@ The value of the :type attribute should be an unconverted widget type."
           (call-interactively
            (widget-get widget :complete-function))))))))
 
+(defun widget--prepare-markers-for-inside-insertion (widget)
+  "Prepare the WIDGET's parent for insertions inside it, if necessary.
+
+Usually, the :from marker has type t, while the :to marker has type nil.
+When recreating a child or a button inside a composite widget right at these
+markers, they have to be changed to nil and t respectively,
+so that the WIDGET's parent (if any), properly contains all of its
+recreated children and buttons.
+
+Prepares also the markers of the WIDGET's grandparent, if necessary.
+
+Returns a list of the markers that had its type changed, for later resetting."
+  (let* ((parent (widget-get widget :parent))
+         (parent-from-marker (and parent (widget-get parent :from)))
+         (parent-to-marker (and parent (widget-get parent :to)))
+         (lst nil)
+         (pos (point)))
+    (when (and parent-from-marker
+               (eq pos (marker-position parent-from-marker))
+               (marker-insertion-type parent-from-marker))
+      (set-marker-insertion-type parent-from-marker nil)
+      (push (cons parent-from-marker t) lst))
+    (when (and parent-to-marker
+               (eq pos (marker-position parent-to-marker))
+               (not (marker-insertion-type parent-to-marker)))
+      (set-marker-insertion-type parent-to-marker t)
+      (push (cons parent-to-marker nil) lst))
+    (when lst
+      (nconc lst (widget--prepare-markers-for-inside-insertion parent)))))
+
+(defun widget--revert-markers-for-outside-insertion (markers)
+  "Revert MARKERS for insertions that do not belong to a widget.
+
+MARKERS is a list of the form (MARKER . NEW-TYPE), as returned by
+`widget--prepare-markers-for-inside-insertion' and this function sets MARKER
+to NEW-TYPE.
+
+Coupled with `widget--prepare-parent-for-inside-insertion', this has the effect
+of setting markers back to the type needed for insertions that do not belong
+to a given widget."
+  (dolist (marker markers)
+    (set-marker-insertion-type (car marker) (cdr marker))))
+
 (defun widget-default-create (widget)
   "Create WIDGET at point in the current buffer."
   (widget-specify-insert
@@ -1731,7 +1780,8 @@ The value of the :type attribute should be an unconverted widget type."
 	 button-begin button-end
 	 sample-begin sample-end
 	 doc-begin doc-end
-	 value-pos)
+         value-pos
+         (markers (widget--prepare-markers-for-inside-insertion widget)))
      (insert (widget-get widget :format))
      (goto-char from)
      ;; Parse escapes in format.
@@ -1791,7 +1841,8 @@ The value of the :type attribute should be an unconverted widget type."
 	  (widget-specify-doc widget doc-begin doc-end))
      (when value-pos
        (goto-char value-pos)
-       (widget-apply widget :value-create)))
+       (widget-apply widget :value-create))
+     (widget--revert-markers-for-outside-insertion markers))
    (let ((from (point-min-marker))
 	 (to (point-max-marker)))
      (set-marker-insertion-type from t)
@@ -2220,11 +2271,16 @@ the earlier input."
     (set-marker-insertion-type (car overlay) t)))
 
 (defun widget-field-value-delete (widget)
-  "Remove the widget from the list of active editing fields."
+  "Remove the field WIDGET from the list of active editing fields.
+
+Delete its overlays as well."
   (setq widget-field-list (delq widget widget-field-list))
   (setq widget-field-new (delq widget widget-field-new))
   ;; These are nil if the :format string doesn't contain `%v'.
   (let ((overlay (widget-get widget :field-overlay)))
+    (when (overlayp overlay)
+      (delete-overlay overlay)))
+  (let ((overlay (widget-get widget :field-end-overlay)))
     (when (overlayp overlay)
       (delete-overlay overlay))))
 
@@ -2549,12 +2605,9 @@ If the item is checked, CHOSEN is a cons whose cdr is the value."
 			     (widget-create-child-value
 			      widget type (cdr chosen)))
 			    (t
-			     (widget-create-child-value
-			      widget type (car (cdr chosen)))
-                             ;; This somehow breaks :options and other
-                             ;; Custom features.
-                             ;; (widget-specify-selected child)
-                             ))))
+                             (widget-specify-selected child)
+                             (widget-create-child-value
+                              widget type (car (cdr chosen)))))))
 	       (t
 		(error "Unknown escape `%c'" escape)))))
      ;; Update properties.

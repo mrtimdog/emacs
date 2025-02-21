@@ -1,6 +1,6 @@
 ;;; vc-cvs.el --- non-resident support for CVS version-control  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1995, 1998-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: FSF (see vc.el for full credits)
 ;; Package: vc
@@ -790,7 +790,7 @@ and that it passes `vc-cvs-global-switches' to it before FLAGS."
 If FILE is a list of files, return non-nil if any of them
 individually should stay local."
   (if (listp file)
-      (delq nil (mapcar (lambda (arg) (vc-cvs-stay-local-p arg)) file))
+      (delq nil (mapcar #'vc-cvs-stay-local-p file))
     (let ((stay-local vc-cvs-stay-local))
       (if (symbolp stay-local) stay-local
        (let ((dirname (if (file-directory-p file)

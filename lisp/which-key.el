@@ -1,6 +1,6 @@
 ;;; which-key.el --- Display available keybindings in popup  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017-2024  Free Software Foundation, Inc.
+;; Copyright (C) 2017-2025 Free Software Foundation, Inc.
 
 ;; Author: Justin Burkett <justin@burkett.cc>
 ;; Maintainer: Justin Burkett <justin@burkett.cc>
@@ -1220,7 +1220,7 @@ total height."
 ;;; Show/hide which-key buffer
 
 (defun which-key--hide-popup ()
-  "Hide the `which-key' buffer."
+  "Hide the which-key buffer."
   (unless (or which-key-persistent-popup
               (member real-this-command which-key--paging-functions))
     (setq which-key--last-try-2-loc nil)
@@ -2038,7 +2038,7 @@ that width."
           (mapcar (pcase-lambda (`(,key ,sep ,desc ,_doc))
                     (concat
                      (format col-format key sep desc)
-                     (make-string (- col-desc-width (string-width desc)) ?\s)))
+                     (make-string (max (- col-desc-width (string-width desc)) 0) ?\s)))
                   col-keys))))
 
 (defun which-key--partition-list (n list)

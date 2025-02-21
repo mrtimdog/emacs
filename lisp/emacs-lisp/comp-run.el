@@ -1,6 +1,6 @@
 ;;; comp-runtime.el --- runtime Lisp native compiler code  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Author: Andrea Corallo <acorallo@gnu.org>
 ;; Keywords: lisp
@@ -160,9 +160,6 @@ LOAD and SELECTOR work as described in `native--compile-async'."
 
 (defvar comp-files-queue ()
   "List of Emacs Lisp files to be compiled.")
-
-(defvar comp-async-compilations (make-hash-table :test #'equal)
-  "Hash table file-name -> async compilation process.")
 
 (defun comp--async-runnings ()
   "Return the number of async compilations currently running.

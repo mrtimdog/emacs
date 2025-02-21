@@ -1,6 +1,6 @@
 /* xfaces.c -- "Face" primitives.
 
-Copyright (C) 1993-1994, 1998-2024 Free Software Foundation, Inc.
+Copyright (C) 1993-1994, 1998-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -696,7 +696,6 @@ void
 free_frame_faces (struct frame *f)
 {
   struct face_cache *face_cache = FRAME_FACE_CACHE (f);
-
   if (face_cache)
     {
       free_face_cache (face_cache);
@@ -1088,7 +1087,7 @@ tty_lookup_color (struct frame *f, Lisp_Object color, Emacs_Color *tty_color,
 
   XSETFRAME (frame, f);
 
-  color_desc = call2 (Qtty_color_desc, color, frame);
+  color_desc = calln (Qtty_color_desc, color, frame);
   if (CONSP (color_desc) && CONSP (XCDR (color_desc)))
     {
       Lisp_Object rgb;
@@ -1117,7 +1116,7 @@ tty_lookup_color (struct frame *f, Lisp_Object color, Emacs_Color *tty_color,
 	      && !NILP (Ffboundp (Qtty_color_standard_values)))
 	    {
 	      /* Look up STD_COLOR separately.  */
-	      rgb = call1 (Qtty_color_standard_values, color);
+	      rgb = calln (Qtty_color_standard_values, color);
 	      if (! parse_rgb_list (rgb, std_color))
 		return false;
 	    }
@@ -1179,7 +1178,7 @@ tty_color_name (struct frame *f, int idx)
       Lisp_Object coldesc;
 
       XSETFRAME (frame, f);
-      coldesc = call2 (Qtty_color_by_index, make_fixnum (idx), frame);
+      coldesc = calln (Qtty_color_by_index, make_fixnum (idx), frame);
 
       if (!NILP (coldesc))
 	return XCAR (coldesc);
@@ -2513,6 +2512,9 @@ evaluate_face_filter (Lisp_Object filter, struct window *w,
     if (!NILP (filter))
       goto err;
 
+    if (NILP (Fget (parameter, QCfiltered)))
+      Fput (parameter, QCfiltered, Qt);
+
     bool match = false;
     if (w)
       {
@@ -3825,7 +3827,7 @@ update_face_from_frame_parameter (struct frame *f, Lisp_Object param,
 	 mode, so that we have to load new defface specs.
 	 Call frame-set-background-mode to do that.  */
       XSETFRAME (frame, f);
-      call1 (Qframe_set_background_mode, frame);
+      calln (Qframe_set_background_mode, frame);
 
       face = Qdefault;
       lface = lface_from_face_name (f, face, true);
@@ -4423,7 +4425,8 @@ face_attr_equal_p (Lisp_Object v1, Lisp_Object v2)
 
       return memcmp (SDATA (v1), SDATA (v2), SBYTES (v1)) == 0;
 
-    case_Lisp_Int:
+    case Lisp_Int0:
+    case Lisp_Int1:
     case Lisp_Symbol:
       return false;
 
@@ -4748,7 +4751,7 @@ the triangle inequality.  */)
   if (NILP (metric))
     return make_fixnum (color_distance (&cdef1, &cdef2));
   else
-    return call2 (metric,
+    return calln (metric,
 		  list3i (cdef1.red, cdef1.green, cdef1.blue),
 		  list3i (cdef2.red, cdef2.green, cdef2.blue));
 }
@@ -5144,10 +5147,19 @@ lookup_basic_face (struct window *w, struct frame *f, int face_id)
      for the very common no-remapping case.  */
   mapping = assq_no_quit (name, Vface_remapping_alist);
   if (NILP (mapping))
-    return face_id;		/* Give up.  */
+    {
+      Lisp_Object face_attrs[LFACE_VECTOR_SIZE];
 
-  /* If there is a remapping entry, lookup the face using NAME, which will
-     handle the remapping too.  */
+      /* If the face inherits from another, we need to realize it,
+         because the parent face could be remapped.  */
+      if (!get_lface_attributes (w, f, name, face_attrs, false, 0)
+	  || NILP (face_attrs[LFACE_INHERIT_INDEX])
+	  || UNSPECIFIEDP (face_attrs[LFACE_INHERIT_INDEX]))
+	return face_id;		/* Give up.  */
+    }
+
+  /* If there is a remapping entry, or the face inherits from another,
+     lookup the face using NAME, which will handle the remapping too.  */
   remapped_face_id = lookup_named_face (w, f, name, false);
   if (remapped_face_id < 0)
     return face_id;		/* Give up. */
@@ -5864,6 +5876,12 @@ realize_basic_faces (struct frame *f)
 
   if (realize_default_face (f))
     {
+      /* Basic faces must be realized disregarding face-remapping-alist,
+         since otherwise face-remapping might affect the basic faces in the
+         face cache, if this function happens to be invoked with current
+	 buffer set to a buffer with a non-nil face-remapping-alist.  */
+      specpdl_ref count = SPECPDL_INDEX ();
+      specbind (Qface_remapping_alist, Qnil);
       realize_named_face (f, Qmode_line_active, MODE_LINE_ACTIVE_FACE_ID);
       realize_named_face (f, Qmode_line_inactive, MODE_LINE_INACTIVE_FACE_ID);
       realize_named_face (f, Qtool_bar, TOOL_BAR_FACE_ID);
@@ -5885,6 +5903,7 @@ realize_basic_faces (struct frame *f)
       realize_named_face (f, Qchild_frame_border, CHILD_FRAME_BORDER_FACE_ID);
       realize_named_face (f, Qtab_bar, TAB_BAR_FACE_ID);
       realize_named_face (f, Qtab_line, TAB_LINE_FACE_ID);
+      unbind_to (count, Qnil);
 
       /* Reflect changes in the `menu' face in menu bars.  */
       if (FRAME_FACE_CACHE (f)->menu_face_changed_p)
@@ -6543,7 +6562,7 @@ map_tty_color (struct frame *f, struct face *face, Lisp_Object color,
   if (STRINGP (color)
       && SCHARS (color)
       && CONSP (Vtty_defined_color_alist)
-      && (def = assoc_no_quit (color, call1 (Qtty_color_alist, frame)),
+      && (def = assoc_no_quit (color, calln (Qtty_color_alist, frame)),
 	  CONSP (def)))
     {
       /* Associations in tty-defined-color-alist are of the form
@@ -7518,14 +7537,14 @@ only for this purpose.  */);
     doc: /* Hash table of global face definitions (for internal use only.)  */);
   Vface_new_frame_defaults =
     /* 33 entries is enough to fit all basic faces */
-    make_hash_table (&hashtest_eq, 33, Weak_None, false);
+    make_hash_table (&hashtest_eq, 33, Weak_None);
 
   DEFVAR_LISP ("face-default-stipple", Vface_default_stipple,
     doc: /* Default stipple pattern used on monochrome displays.
 This stipple pattern is used on monochrome displays
 instead of shades of gray for a face background color.
 See `set-face-stipple' for possible values for this variable.  */);
-  Vface_default_stipple = build_pure_c_string ("gray3");
+  Vface_default_stipple = build_string ("gray3");
 
   DEFVAR_LISP ("tty-defined-color-alist", Vtty_defined_color_alist,
    doc: /* An alist of defined terminal colors and their RGB values.

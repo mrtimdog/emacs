@@ -1,6 +1,6 @@
 ;;; rfc2047.el --- functions for encoding and decoding rfc2047 messages  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1998-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	MORIOKA Tomohiko <morioka@jaist.ac.jp>
@@ -1076,7 +1076,7 @@ other than `\"' and `\\' in quoted strings."
 		(while (search-forward "\"" end t)
 		  (when (prog2
 			    (backward-char)
-			    (zerop (% (skip-chars-backward "\\\\") 2))
+			    (evenp (skip-chars-backward "\\\\"))
 			  (goto-char (match-beginning 0)))
 		    (insert "\\"))
 		  (forward-char))

@@ -1,6 +1,6 @@
 ;;; tool-bar.el --- setting up the tool bar  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; Keywords: mouse frames
@@ -92,8 +92,8 @@ parameter is set to `top', and above the tool bar it is set to
 `bottom'.")
 
 (global-set-key [tool-bar]
-		`(menu-item ,(purecopy "tool bar") ignore
-			    :filter tool-bar-make-keymap))
+                '(menu-item "tool bar" ignore
+                            :filter tool-bar-make-keymap))
 
 (declare-function image-mask-p "image.c" (spec &optional frame))
 

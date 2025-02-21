@@ -1,6 +1,6 @@
 ;;; calc-keypd.el --- mouse-capable keypad input for Calc  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1990-1993, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 
@@ -411,7 +411,7 @@
     (if invhyp (calc-wrapper))  ; clear Inv and Hyp flags
     (unwind-protect
 	(cond ((or (null cmd)
-		   (= (% row 2) 0))
+		   (evenp row))
 	       (beep))
 	      ((and (> (minibuffer-depth) 0))
 	       (cond (isstring

@@ -1,6 +1,6 @@
 /* Asynchronous subprocess control for GNU Emacs.
 
-Copyright (C) 1985-1988, 1993-1996, 1998-1999, 2001-2024 Free Software
+Copyright (C) 1985-1988, 1993-1996, 1998-1999, 2001-2025 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -38,6 +38,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 
 #else
@@ -1821,6 +1822,7 @@ usage: (make-process &rest ARGS)  */)
 
   if (nargs == 0)
     return Qnil;
+  CHECK_KEYWORD_ARGS (nargs);
 
   /* Save arguments for process-contact and clone-process.  */
   contact = Flist (nargs, args);
@@ -2430,6 +2432,7 @@ usage:  (make-pipe-process &rest ARGS)  */)
 
   if (nargs == 0)
     return Qnil;
+  CHECK_KEYWORD_ARGS (nargs);
 
   contact = Flist (nargs, args);
 
@@ -2861,6 +2864,9 @@ static const struct socket_options {
 #ifdef SO_REUSEADDR
     { ":reuseaddr", SOL_SOCKET, SO_REUSEADDR, SOPT_BOOL, OPIX_REUSEADDR },
 #endif
+#ifdef TCP_NODELAY
+    { ":nodelay", IPPROTO_TCP, TCP_NODELAY, SOPT_BOOL, OPIX_MISC },
+#endif
     { 0, 0, 0, SOPT_UNKNOWN, OPIX_NONE }
   };
 
@@ -3062,6 +3068,8 @@ usage: (serial-process-configure &rest ARGS)  */)
   Lisp_Object contact = Qnil;
   Lisp_Object proc = Qnil;
 
+  CHECK_KEYWORD_ARGS (nargs);
+
   contact = Flist (nargs, args);
 
   proc = plist_get (contact, QCprocess);
@@ -3166,6 +3174,7 @@ usage:  (make-serial-process &rest ARGS)  */)
 
   if (nargs == 0)
     return Qnil;
+  CHECK_KEYWORD_ARGS (nargs);
 
   contact = Flist (nargs, args);
 
@@ -3363,7 +3372,7 @@ finish_after_tls_connection (Lisp_Object proc)
   Lisp_Object result = Qt;
 
   if (!NILP (Ffboundp (Qnsm_verify_connection)))
-    result = call3 (Qnsm_verify_connection,
+    result = calln (Qnsm_verify_connection,
 		    proc,
 		    plist_get (contact, QChost),
 		    plist_get (contact, QCservice));
@@ -3899,6 +3908,7 @@ The following network options can be specified for this connection:
 :broadcast BOOL    -- Allow send and receive of datagram broadcasts.
 :dontroute BOOL    -- Only send to directly connected hosts.
 :keepalive BOOL    -- Send keep-alive messages on network stream.
+:nodelay BOOL      -- Set TCP_NODELAY on the network socket.
 :linger BOOL or TIMEOUT -- Send queued messages before closing.
 :oobinline BOOL    -- Place out-of-band data in receive data stream.
 :priority INT      -- Set protocol defined priority for sent packets.
@@ -3966,6 +3976,7 @@ usage: (make-network-process &rest ARGS)  */)
 
   if (nargs == 0)
     return Qnil;
+  CHECK_KEYWORD_ARGS (nargs);
 
   /* Save arguments for process-contact and clone-process.  */
   contact = Flist (nargs, args);
@@ -4346,6 +4357,10 @@ network_interface_list (bool full, unsigned short match)
 
       if (full)
         {
+	  /* Sometimes sa_family is only filled in correctly in the
+	     interface address, not the netmask, so copy it across
+	     (Bug#74907).  */
+	  it->ifa_netmask->sa_family = it->ifa_addr->sa_family;
           elt = Fcons (conv_sockaddr_to_lisp (it->ifa_netmask, len), elt);
           /* There is an it->ifa_broadaddr field, but its contents are
              unreliable, so always calculate the broadcast address from
@@ -4604,7 +4619,7 @@ network_interface_info (Lisp_Object ifname)
 DEFUN ("network-interface-list", Fnetwork_interface_list,
        Snetwork_interface_list, 0, 2, 0,
        doc: /* Return an alist of all network interfaces and their network address.
-Each element is cons of the form (IFNAME . IP) where IFNAME is a
+Each element is a cons of the form (IFNAME . IP) where IFNAME is a
 string containing the interface name, and IP is the network address in
 internal format; see the description of ADDRESS in
 `make-network-process'.  The interface name is not guaranteed to be
@@ -4655,7 +4670,8 @@ where ADDR is the layer 3 address, BCAST is the layer 3 broadcast address,
 NETMASK is the layer 3 network mask, HWADDR is the layer 2 address, and
 FLAGS is the current flags of the interface.
 
-Data that is unavailable is returned as nil.  */)
+Data that is unavailable is returned as nil.  Only returns IPv4 layer 3
+addresses, for IPv6 use `network-interface-list'.  */)
   (Lisp_Object ifname)
 {
 #if ((defined HAVE_NET_IF_H			       \
@@ -4759,13 +4775,17 @@ returned from the lookup.  */)
     {
       for (lres = res; lres; lres = lres->ai_next)
         {
-#ifndef AF_INET6
-          if (lres->ai_family != AF_INET)
-            continue;
+	  /* Avoid converting non-IP addresses (Bug#74907).  */
+	  if (lres->ai_family == AF_INET
+#ifdef AF_INET6
+	      || lres->ai_family == AF_INET6
 #endif
-          addresses = Fcons (conv_sockaddr_to_lisp (lres->ai_addr,
-                                                    lres->ai_addrlen),
-                             addresses);
+	      )
+	    addresses = Fcons (conv_sockaddr_to_lisp (lres->ai_addr,
+						      lres->ai_addrlen),
+			       addresses);
+	  else
+	    continue;
         }
       addresses = Fnreverse (addresses);
 
@@ -4949,7 +4969,7 @@ server_accept_connection (Lisp_Object server, int channel)
     {
       int code = errno;
       if (!would_block (code) && !NILP (ps->log))
-	call3 (ps->log, server, Qnil,
+	calln (ps->log, server, Qnil,
 	       concat3 (build_string ("accept failed with code"),
 			Fnumber_to_string (make_fixnum (code)),
 			build_string ("\n")));
@@ -5111,7 +5131,7 @@ server_accept_connection (Lisp_Object server, int channel)
   if (!NILP (ps->log))
     {
       AUTO_STRING (accept_from, "accept from ");
-      call3 (ps->log, server, proc, concat3 (accept_from, host_string, nl));
+      calln (ps->log, server, proc, concat3 (accept_from, host_string, nl));
     }
 
   AUTO_STRING (open_from, "open from ");
@@ -8448,7 +8468,7 @@ See `process-attributes' for getting attributes of a process given its ID.  */)
     = Ffind_file_name_handler (BVAR (current_buffer, directory),
 			       Qlist_system_processes);
   if (!NILP (handler))
-    return call1 (handler, Qlist_system_processes);
+    return calln (handler, Qlist_system_processes);
 
   return list_system_processes ();
 }
@@ -8512,7 +8532,7 @@ integer or floating point values.
     = Ffind_file_name_handler (BVAR (current_buffer, directory),
 			       Qprocess_attributes);
   if (!NILP (handler))
-    return call2 (handler, Qprocess_attributes, pid);
+    return calln (handler, Qprocess_attributes, pid);
 
   return system_process_attributes (pid);
 }
@@ -8620,50 +8640,39 @@ init_process_emacs (int sockfd)
 
   inhibit_sentinels = 0;
 
-#ifdef HAVE_UNEXEC
-  /* Clear child_signal_read_fd and child_signal_write_fd after dumping,
-     lest wait_reading_process_output should select on nonexistent file
-     descriptors which existed in the build process.  */
-  child_signal_read_fd = -1;
-  child_signal_write_fd = -1;
-#endif /* HAVE_UNEXEC */
-
-  if (!will_dump_with_unexec_p ())
-    {
 #if defined HAVE_GLIB && !defined WINDOWSNT
-      /* Tickle Glib's child-handling code.  Ask Glib to install a
-	 watch source for Emacs itself which will initialize glib's
-	 private SIGCHLD handler, allowing catch_child_signal to copy
-	 it into lib_child_handler.  This is a hacky workaround to get
-	 glib's g_unix_signal_handler into lib_child_handler.
+  /* Tickle Glib's child-handling code.  Ask Glib to install a
+     watch source for Emacs itself which will initialize glib's
+     private SIGCHLD handler, allowing catch_child_signal to copy
+     it into lib_child_handler.  This is a hacky workaround to get
+     glib's g_unix_signal_handler into lib_child_handler.
 
-	 In Glib 2.37.5 (2013), commit 2e471acf changed Glib to
-         always install a signal handler when g_child_watch_source_new
-	 is called and not just the first time it's called, and to
-	 reset signal handlers to SIG_DFL when it no longer has a
-	 watcher on that signal.  Arrange for Emacs's signal handler
-	 to be reinstalled even if this happens.
+     In Glib 2.37.5 (2013), commit 2e471acf changed Glib to
+     always install a signal handler when g_child_watch_source_new
+     is called and not just the first time it's called, and to
+     reset signal handlers to SIG_DFL when it no longer has a
+     watcher on that signal.  Arrange for Emacs's signal handler
+     to be reinstalled even if this happens.
 
-	 In Glib 2.73.2 (2022), commit f615eef4 changed Glib again,
-	 to not install a signal handler if the system supports
-	 pidfd_open and waitid (as in Linux kernel 5.3+).  The hacky
-	 workaround is not needed in this case.  */
-      GSource *source = g_child_watch_source_new (getpid ());
+     In Glib 2.73.2 (2022), commit f615eef4 changed Glib again,
+     to not install a signal handler if the system supports
+     pidfd_open and waitid (as in Linux kernel 5.3+).  The hacky
+     workaround is not needed in this case.  */
+  GSource *source = g_child_watch_source_new (getpid ());
+  catch_child_signal ();
+  g_source_unref (source);
+
+  if (lib_child_handler != dummy_handler)
+    {
+      /* The hacky workaround is needed on this platform.  */
+      signal_handler_t lib_child_handler_glib = lib_child_handler;
       catch_child_signal ();
-      g_source_unref (source);
-
-      if (lib_child_handler != dummy_handler)
-	{
-	  /* The hacky workaround is needed on this platform.  */
-	  signal_handler_t lib_child_handler_glib = lib_child_handler;
-	  catch_child_signal ();
-	  eassert (lib_child_handler == dummy_handler);
-	  lib_child_handler = lib_child_handler_glib;
-	}
-#else
-      catch_child_signal ();
-#endif
+      eassert (lib_child_handler == dummy_handler);
+      lib_child_handler = lib_child_handler_glib;
     }
+#else
+  catch_child_signal ();
+#endif
 
 #ifdef HAVE_SETRLIMIT
   /* Don't allocate more than FD_SETSIZE file descriptors for Emacs itself.  */
@@ -8869,7 +8878,7 @@ allow them to produce more output before Emacs tries to read it.
 If the value is t, the delay is reset after each write to the process; any other
 non-nil value means that the delay is not reset on write.
 The variable takes effect when `start-process' is called.  */);
-  Vprocess_adaptive_read_buffering = Qt;
+  Vprocess_adaptive_read_buffering = Qnil;
 
   DEFVAR_BOOL ("process-prioritize-lower-fds", process_prioritize_lower_fds,
 	       doc: /* Whether to start checking for subprocess output from first file descriptor.
@@ -8998,7 +9007,7 @@ sentinel or a process filter function has an error.  */);
    const struct socket_options *sopt;
 
 #define ADD_SUBFEATURE(key, val) \
-  subfeatures = pure_cons (pure_cons (key, pure_cons (val, Qnil)), subfeatures)
+  subfeatures = Fcons (Fcons (key, Fcons (val, Qnil)), subfeatures)
 
    ADD_SUBFEATURE (QCnowait, Qt);
 #ifdef DATAGRAM_SOCKETS
@@ -9020,7 +9029,7 @@ sentinel or a process filter function has an error.  */);
    ADD_SUBFEATURE (QCserver, Qt);
 
    for (sopt = socket_options; sopt->name; sopt++)
-     subfeatures = pure_cons (intern_c_string (sopt->name), subfeatures);
+     subfeatures = Fcons (intern_c_string (sopt->name), subfeatures);
 
    Fprovide (intern_c_string ("make-network-process"), subfeatures);
  }

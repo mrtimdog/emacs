@@ -1,6 +1,6 @@
 ;;; descr-text.el --- describe text mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1994-1996, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -407,8 +407,7 @@ The character information includes:
            (composition-string nil)
            (disp-vector (and display-table (aref display-table char)))
            (multibyte-p enable-multibyte-characters)
-           (overlays (mapcar (lambda (o) (overlay-properties o))
-                             (overlays-at pos)))
+           (overlays (mapcar #'overlay-properties (overlays-at pos)))
            (char-description (if (< char 128)
                                  (single-key-description char)
                                (string (if (not multibyte-p)

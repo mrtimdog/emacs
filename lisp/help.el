@@ -1,6 +1,6 @@
 ;;; help.el --- help commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2024 Free Software
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -395,7 +395,7 @@ Do not call this in the scope of `with-help-window'."
 
 (defalias 'help #'help-for-help)
 (make-help-screen help-for-help
-  (purecopy "Type a help option: [abcCdefFgiIkKlLmnprstvw.] C-[cdefmnoptw] or ?")
+  "Type a help option: [abcCdefFgiIkKlLmnprstvw.] C-[cdefmnoptw] or ?"
   (concat
    "(Type "
    (help--key-description-fontified (kbd "<PageDown>"))
@@ -1397,6 +1397,7 @@ Otherwise, return a new string."
     ;; itself.
     (let ((keymap overriding-local-map)
           (inhibit-modification-hooks t)
+          (inhibit-read-only t)
           (orig-buf (current-buffer)))
       (with-temp-buffer
         (insert string)
@@ -2308,7 +2309,7 @@ the same names as used in the original source code, when possible."
             (dolist (arg arglist)
               (unless (and (symbolp arg)
                            (let ((name (symbol-name arg)))
-                             (if (eq (aref name 0) ?&)
+                             (if (and (> (length name) 0) (eq (aref name 0) ?&))
                                  (memq arg '(&rest &optional))
                                (not (string-search "." name)))))
                 (setq valid nil)))

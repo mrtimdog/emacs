@@ -1,6 +1,6 @@
 ;;; cl-print.el --- CL-style generic printing  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2017-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords:
@@ -160,7 +160,7 @@ Print the contents hidden by the ellipsis to STREAM."
   'follow-link t
   'action (lambda (button)
             (disassemble (button-get button 'byte-code-function)))
-  'help-echo (purecopy "mouse-2, RET: disassemble this function"))
+  'help-echo "mouse-2, RET: disassemble this function")
 
 (defvar cl-print-compiled nil
   "Control how to print byte-compiled functions.

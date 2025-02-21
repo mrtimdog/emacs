@@ -1,6 +1,6 @@
 ;;; whitespace.el --- minor mode to visualize TAB, (HARD) SPACE, NEWLINE -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Vinicius Jose Latorre <viniciusjl.gnu@gmail.com>
 ;; Keywords: data, text
@@ -2544,7 +2544,7 @@ purposes)."
 		(or (eq (aref vec i) ?\n)
 		    (aset vec i
 			  (make-glyph-code (aref vec i)
-					   whitespace-newline)))))
+					   'whitespace-newline)))))
 	    ;; Display mapping
 	    (aset buffer-display-table (cadr entry) vec)))))))
 

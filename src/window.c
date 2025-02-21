@@ -1,6 +1,6 @@
 /* Window creation, deletion and examination for GNU Emacs.
    Does not include redisplay.
-   Copyright (C) 1985-1987, 1993-1998, 2000-2024 Free Software
+   Copyright (C) 1985-1987, 1993-1998, 2000-2025 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -105,6 +105,9 @@ Lisp_Object minibuf_window;
 /* Non-nil means it is the window whose mode line should be
    shown as the selected window when the minibuffer is selected.  */
 Lisp_Object minibuf_selected_window;
+
+/* Non-nil means it is the window containing the last mouse movement.  */
+Lisp_Object last_mouse_window;
 
 /* Incremented for each window created.  */
 static EMACS_INT sequence_number;
@@ -652,15 +655,16 @@ Return nil for an internal window or a deleted window.  */)
 
 DEFUN ("window-old-buffer", Fwindow_old_buffer, Swindow_old_buffer, 0, 1, 0,
        doc: /* Return the old buffer displayed by WINDOW.
-WINDOW must be a live window and defaults to the selected one.
+WINDOW can be any window and defaults to the selected one.
 
 The return value is the buffer shown in WINDOW at the last time window
-change functions were run.  It is nil if WINDOW was created after
-that.  It is t if WINDOW has been restored from a window configuration
-after that.  */)
+change functions were run or WINDOW is a former live window that was
+deleted.  It is nil if WINDOW was created after that.  It is t if WINDOW
+has been restored from a window configuration after that.  It is always
+nil if WINDOW is an internal window.  */)
   (Lisp_Object window)
 {
-  struct window *w = decode_live_window (window);
+  struct window *w = decode_any_window (window);
 
   return (NILP (w->old_buffer)
 	  /* A new window.  */
@@ -668,8 +672,8 @@ after that.  */)
 	  : (w->change_stamp != WINDOW_XFRAME (w)->change_stamp)
 	  /* A window restored from a configuration.  */
 	  ? Qt
-	  /* A window that was live the last time seen by window
-	     change functions.  */
+	  /* A window that was live the last time seen by window change
+	     functions or was deleted.  */
 	  : w->old_buffer);
 }
 
@@ -2394,8 +2398,41 @@ Return VALUE.  */)
 {
   register struct window *w = decode_any_window (window);
   Lisp_Object old_alist_elt;
+  struct frame* f;
 
   old_alist_elt = Fassq (parameter, w->window_parameters);
+
+  /* If this window parameter has been used in a face remapping filter
+     expression anywhere at any time and we changed its value, force a
+     from-scratch redisplay to make sure that everything that depends on
+     a face filtered on the window parameter value is up-to-date.
+
+     We compare with Qt here instead of using !NILP so that users can
+     set this property to a non-nil, non-t value to inhibit this
+     mechanism for a specific window parameter.
+
+     FIXME: instead of taking a sledgehammer to redisplay, we could be
+     more precise in tracking which display bits depend on which
+     remapped faces.  In particular, 1) if a window parameter named in a
+     face filter affects only faces used in drawing fringes, we don't
+     need to redraw TTY frames, but if the filter is ever used in a
+     non-fringe context (e.g. the 'face' text property), we need to
+     redraw TTY frames too.  2) In the fringe case, we should limit the
+     redraw damage to the fringes of the affected window and not the
+     whole frame containing the window.  Today, we seldom change window
+     parameters named in face filters.  We should implement the
+     optimizations above when this assumption no longer holds.  */
+  if (SYMBOLP (parameter)
+      && WINDOW_LIVE_P (window)
+      && EQ (Fget (parameter, QCfiltered), Qt)
+      && FRAME_WINDOW_P ((f = WINDOW_XFRAME (w)))
+      && !EQ (CDR_SAFE (old_alist_elt), value)
+      && window_auto_redraw_on_parameter_change)
+    {
+      f->face_change = 1;
+      fset_redisplay (f);
+    }
+
   if (NILP (old_alist_elt))
     wset_window_parameters
       (w, Fcons (Fcons (parameter, value), w->window_parameters));
@@ -2631,8 +2668,8 @@ recombine_windows (Lisp_Object window)
 static void
 delete_deletable_window (Lisp_Object window)
 {
-  if (!NILP (call1 (Qwindow_deletable_p, window)))
-    call1 (Qdelete_window, window);
+  if (!NILP (calln (Qwindow_deletable_p, window)))
+    calln (Qdelete_window, window);
 }
 
 /***********************************************************************
@@ -3063,6 +3100,38 @@ be listed first but no error is signaled.  */)
 {
   return window_list_1 (window, minibuf, all_frames);
 }
+
+/** Return most recently selected frame that has the same root as a
+    given frame.  It's defined here because the static window_list_1 is
+    here too but in fact it's only needed in the frame code.  */
+Lisp_Object
+mru_rooted_frame (struct frame *f)
+{
+  Lisp_Object windows = window_list_1 (FRAME_SELECTED_WINDOW (f), Qnil, Qt);
+  struct frame *r = root_frame (f);
+  struct window *b = NULL;
+
+  for (; CONSP (windows); windows = XCDR (windows))
+    {
+      struct window *w = XWINDOW (XCAR (windows));
+      struct frame *wf = WINDOW_XFRAME (w);
+
+      if (wf != f && root_frame (wf) == r && FRAME_VISIBLE_P (wf)
+	  && (!b || w->use_time > b->use_time))
+	b = w;
+    }
+
+  if (b)
+    return WINDOW_FRAME (b);
+  else
+    {
+      Lisp_Object root;
+
+      XSETFRAME (root, r);
+
+      return root;
+    }
+}
 
 /* Look at all windows, performing an operation specified by TYPE
    with argument OBJ.
@@ -3265,7 +3334,7 @@ resize_root_window (Lisp_Object window, Lisp_Object delta,
 		    Lisp_Object horizontal, Lisp_Object ignore,
 		    Lisp_Object pixelwise)
 {
-  return call5 (Qwindow__resize_root_window, window, delta,
+  return calln (Qwindow__resize_root_window, window, delta,
 		horizontal, ignore, pixelwise);
 }
 
@@ -3273,7 +3342,7 @@ resize_root_window (Lisp_Object window, Lisp_Object delta,
 static Lisp_Object
 window_pixel_to_total (Lisp_Object frame, Lisp_Object horizontal)
 {
-  return call2 (Qwindow__pixel_to_total, frame, horizontal);
+  return calln (Qwindow__pixel_to_total, frame, horizontal);
 }
 
 
@@ -3644,7 +3713,7 @@ replace_buffer_in_windows (Lisp_Object buffer)
   /* When kill-buffer is called early during loadup, this function is
      undefined.  */
   if (!NILP (Ffboundp (Qreplace_buffer_in_windows)))
-    call1 (Qreplace_buffer_in_windows, buffer);
+    calln (Qreplace_buffer_in_windows, buffer);
 }
 
 /** If BUFFER is shown in any window, safely replace it with some other
@@ -4369,7 +4438,7 @@ This function runs `window-scroll-functions' before running
 	       dedication.  */
 	    wset_dedicated (w, Qnil);
 
-	  call1 (Qrecord_window_buffer, window);
+	  calln (Qrecord_window_buffer, window);
 	}
 
       unshow_buffer (w);
@@ -4383,7 +4452,7 @@ This function runs `window-scroll-functions' before running
 static Lisp_Object
 display_buffer (Lisp_Object buffer, Lisp_Object not_this_window_p, Lisp_Object override_frame)
 {
-  return call3 (Qdisplay_buffer, buffer, not_this_window_p, override_frame);
+  return calln (Qdisplay_buffer, buffer, not_this_window_p, override_frame);
 }
 
 DEFUN ("force-window-update", Fforce_window_update, Sforce_window_update,
@@ -4447,7 +4516,7 @@ temp_output_buffer_show (register Lisp_Object buf)
   set_buffer_internal (old);
 
   if (!NILP (Vtemp_buffer_show_function))
-    call1 (Vtemp_buffer_show_function, buf);
+    calln (Vtemp_buffer_show_function, buf);
   else if (WINDOW_LIVE_P (window = display_buffer (buf, Qnil, Qnil)))
     {
       if (!EQ (XWINDOW (window)->frame, selected_frame))
@@ -4489,45 +4558,6 @@ allocate_window (void)
 {
   return ALLOCATE_ZEROED_PSEUDOVECTOR (struct window, mode_line_help_echo,
 				       PVEC_WINDOW);
-}
-
-/* Make new window, have it replace WINDOW in window-tree, and make
-   WINDOW its only vertical child (HORFLAG means make WINDOW its only
-   horizontal child).   */
-static void
-make_parent_window (Lisp_Object window, bool horflag)
-{
-  Lisp_Object parent;
-  register struct window *o, *p;
-
-  o = XWINDOW (window);
-  p = allocate_window ();
-  memcpy ((char *) p + sizeof (union vectorlike_header),
-	  (char *) o + sizeof (union vectorlike_header),
-	  word_size * VECSIZE (struct window));
-  /* P's buffer slot may change from nil to a buffer...  */
-  adjust_window_count (p, 1);
-  XSETWINDOW (parent, p);
-
-  p->sequence_number = ++sequence_number;
-
-  replace_window (window, parent, true);
-
-  wset_next (o, Qnil);
-  wset_prev (o, Qnil);
-  wset_parent (o, parent);
-  /* ...but now P becomes an internal window.  */
-  wset_start (p, Qnil);
-  wset_pointm (p, Qnil);
-  wset_old_pointm (p, Qnil);
-  wset_buffer (p, Qnil);
-  wset_combination (p, horflag, window);
-  wset_combination_limit (p, Qnil);
-  /* Reset any previous and next buffers of p which have been installed
-     by the memcpy above.  */
-  wset_prev_buffers (p, Qnil);
-  wset_next_buffers (p, Qnil);
-  wset_window_parameters (p, Qnil);
 }
 
 /* Make new window from scratch.  */
@@ -5073,7 +5103,7 @@ resize_frame_windows (struct frame *f, int size, bool horflag)
 }
 
 
-DEFUN ("split-window-internal", Fsplit_window_internal, Ssplit_window_internal, 4, 4, 0,
+DEFUN ("split-window-internal", Fsplit_window_internal, Ssplit_window_internal, 4, 5, 0,
        doc: /* Split window OLD.
 Second argument PIXEL-SIZE specifies the number of pixels of the
 new window.  It must be a positive integer.
@@ -5088,32 +5118,33 @@ SIDE t (or `right') specifies that the new window shall be located on
 the right side of WINDOW.  SIDE `left' means the new window shall be
 located on the left of WINDOW.  In both cases PIXEL-SIZE specifies the
 width of the new window including space reserved for fringes and the
-scrollbar or a divider column.
+scroll bar or a divider column.
 
 Fourth argument NORMAL-SIZE specifies the normal size of the new window
-according to the SIDE argument.
+according to the SIDE argument.  Optional fifth argument REFER is as for
+'split-window'.
 
 The new pixel and normal sizes of all involved windows must have been
 set correctly.  See the code of `split-window' for how this is done.  */)
-  (Lisp_Object old, Lisp_Object pixel_size, Lisp_Object side, Lisp_Object normal_size)
+  (Lisp_Object old, Lisp_Object pixel_size, Lisp_Object side,
+   Lisp_Object normal_size, Lisp_Object refer)
 {
-  /* OLD (*o) is the window we have to split.  (*p) is either OLD's
-     parent window or an internal window we have to install as OLD's new
-     parent.  REFERENCE (*r) must denote a live window, or is set to OLD
-     provided OLD is a leaf window, or to the frame's selected window.
-     NEW (*n) is the new window created with some parameters taken from
-     REFERENCE (*r).  */
-  Lisp_Object new, frame, reference;
-  struct window *o, *p, *n, *r, *c;
-  struct frame *f;
+  /* OLD (*o) is the window to split.  REFER (*r) is a reference window,
+     either an arbitrary live window or a former live, now deleted
+     window on the same frame as OLD.  NEW (*n) is the new window
+     created anew or resurrected from REFER (*r), if specified.  *p
+     refers either to OLD's parent window that will become NEW's parent
+     window too or to a new internal window that becomes OLD's and NEW's
+     new parent.  */
+  struct window *o = decode_valid_window (old);
+  Lisp_Object frame = WINDOW_FRAME (o);
+  struct frame *f = XFRAME (frame);
+  struct window *p, *n, *r, *c;
   bool horflag
     /* HORFLAG is true when we split side-by-side, false otherwise.  */
     = EQ (side, Qt) || EQ (side, Qleft) || EQ (side, Qright);
-
-  CHECK_WINDOW (old);
-  o = XWINDOW (old);
-  frame = WINDOW_FRAME (o);
-  f = XFRAME (frame);
+  Lisp_Object new, parent = Qnil;
+  bool dead = false;
 
   CHECK_FIXNUM (pixel_size);
   EMACS_INT total_size
@@ -5131,14 +5162,74 @@ set correctly.  See the code of `split-window' for how this is done.  */)
 	   ? WINDOW_VERTICAL_COMBINATION_P (XWINDOW (o->parent))
 	   : WINDOW_HORIZONTAL_COMBINATION_P (XWINDOW (o->parent))));
 
-  /* We need a live reference window to initialize some parameters.  */
-  if (WINDOW_LIVE_P (old))
-    /* OLD is live, use it as reference window.  */
-    reference = old;
+  /* Set up reference window.  */
+  if (NILP (refer))
+    {
+      if (WINDOW_LIVE_P (old))
+	/* OLD is live, use it as reference window.  */
+	refer = old;
+      else
+	/* Use the frame's selected window as reference window.  */
+	refer = FRAME_SELECTED_WINDOW (f);
+
+      r = XWINDOW (refer);
+    }
+  else if (CONSP (refer))
+    {
+      /* If REFER is a cons, then its car must be a deleted, former live
+	 window and its cdr must be a deleted former parent window.  Set
+	 PARENT to the cdr of REFER and REFER to its car.  WINDOW and
+	 REFER end up as the sole children of PARENT which replaces
+	 WINDOW in the window tree.  As a special case, if REFER's cdr
+	 is t, reuse REFER's car's old parent as new parent provided it
+	 is a deleted fromer parent window.  */
+      parent = Fcdr (refer);
+      refer = Fcar (refer);
+      r = decode_any_window (refer);
+
+      if (!NILP (r->contents) || !BUFFERP (r->old_buffer))
+	error ("REFER's car must specify a deleted, former live window");
+      else if (!BUFFER_LIVE_P (XBUFFER (r->old_buffer)))
+	error ("The buffer formerly shown by REFER's car has been killed");
+      else if (!EQ (r->frame, frame))
+	error ("REFER's car must specify a window on same frame as WINDOW");
+
+      if (EQ (parent, Qt))
+	/* If REFER's cdr is t, use the old parent of REFER's car as new
+	   parent.  */
+	parent = r->parent;
+
+      p = decode_any_window (parent);
+
+      if (!NILP (p->contents) || BUFFERP (p->old_buffer))
+	error ("REFER's cdr must specify a deleted, former parent window");
+      else if (!EQ (p->frame, frame))
+	error ("REFER's cdr must specify window on same frame as WINDOW");
+
+      dead = true;
+    }
   else
-    /* Use the frame's selected window as reference window.  */
-    reference = FRAME_SELECTED_WINDOW (f);
-  r = XWINDOW (reference);
+    {
+      r = decode_any_window (refer);
+
+      if (NILP (r->contents))
+	/* Presumably a deleted, former live window.  Check whether its
+	   contents can be used.  */
+	{
+	  if (!BUFFERP (r->old_buffer))
+	    error ("REFER must specify a former live window (must have shown a buffer)");
+	  else if (!BUFFER_LIVE_P (XBUFFER (r->old_buffer)))
+	    error ("The buffer formerly shown by REFER has been killed");
+	  else if (!EQ (r->frame, frame))
+	    error ("REFER must specify a window on same frame as WINDOW");
+
+	  dead = true;
+	}
+      else if (!NILP (parent))
+	error ("If REFER is a cons, its car must not specify a live window");
+      else if (!WINDOW_LIVE_P (refer))
+	error ("REFER is not a live window (does not show a buffer)");
+    }
 
   /* The following bugs are caught by `split-window'.  */
   if (MINI_WINDOW_P (o))
@@ -5149,16 +5240,18 @@ set correctly.  See the code of `split-window' for how this is done.  */)
     /* `window-combination-resize' non-nil means try to resize OLD's siblings
        proportionally.  */
     {
-      p = XWINDOW (o->parent);
+      struct window *op = XWINDOW (o->parent);
+
       /* Temporarily pretend we split the parent window.  */
       wset_new_pixel
-	(p, make_fixnum ((horflag ? p->pixel_width : p->pixel_height)
+	(op, make_fixnum ((horflag ? op->pixel_width : op->pixel_height)
 			 - XFIXNUM (pixel_size)));
-      if (!window_resize_check (p, horflag))
+      if (!window_resize_check (op, horflag))
 	error ("Window sizes don't fit");
       else
 	/* Undo the temporary pretension.  */
-	wset_new_pixel (p, make_fixnum (horflag ? p->pixel_width : p->pixel_height));
+	wset_new_pixel
+	  (op, make_fixnum (horflag ? op->pixel_width : op->pixel_height));
     }
   else
     {
@@ -5178,8 +5271,24 @@ set correctly.  See the code of `split-window' for how this is done.  */)
       Lisp_Object new_normal
 	= horflag ? o->normal_cols : o->normal_lines;
 
-      make_parent_window (old, horflag);
-      p = XWINDOW (o->parent);
+      if (NILP (parent))
+	/* This is the crux of the old make_parent_window.  */
+	{
+	  p = allocate_window ();
+	  XSETWINDOW (parent, p);
+	  p->sequence_number = ++sequence_number;
+	  wset_frame (p, frame);
+	}
+      else
+	/* Pacify GCC.  */
+	p = XWINDOW (parent);
+
+      replace_window (old, parent, true);
+      wset_next (o, Qnil);
+      wset_prev (o, Qnil);
+      wset_parent (o, parent);
+      wset_combination (p, horflag, old);
+
       if (EQ (Vwindow_combination_limit, Qt))
 	/* Store t in the new parent's combination_limit slot to avoid
 	   that its children get merged into another window.  */
@@ -5195,7 +5304,12 @@ set correctly.  See the code of `split-window' for how this is done.  */)
     p = XWINDOW (o->parent);
 
   fset_redisplay (f);
-  new = make_window ();
+
+  if (dead)
+    new = refer;
+  else
+    new = make_window ();
+
   n = XWINDOW (new);
   wset_frame (n, frame);
   wset_parent (n, o->parent);
@@ -5222,16 +5336,19 @@ set correctly.  See the code of `split-window' for how this is done.  */)
   n->window_end_valid = false;
   n->last_cursor_vpos = 0;
 
-  /* Get special geometry settings from reference window.  */
-  n->left_margin_cols = r->left_margin_cols;
-  n->right_margin_cols = r->right_margin_cols;
-  n->left_fringe_width = r->left_fringe_width;
-  n->right_fringe_width = r->right_fringe_width;
-  n->fringes_outside_margins = r->fringes_outside_margins;
-  n->scroll_bar_width = r->scroll_bar_width;
-  n->scroll_bar_height = r->scroll_bar_height;
-  wset_vertical_scroll_bar_type (n, r->vertical_scroll_bar_type);
-  wset_horizontal_scroll_bar_type (n, r->horizontal_scroll_bar_type);
+  if (!dead)
+    {
+      /* Get special geometry settings from reference window.  */
+      n->left_margin_cols = r->left_margin_cols;
+      n->right_margin_cols = r->right_margin_cols;
+      n->left_fringe_width = r->left_fringe_width;
+      n->right_fringe_width = r->right_fringe_width;
+      n->fringes_outside_margins = r->fringes_outside_margins;
+      n->scroll_bar_width = r->scroll_bar_width;
+      n->scroll_bar_height = r->scroll_bar_height;
+      wset_vertical_scroll_bar_type (n, r->vertical_scroll_bar_type);
+      wset_horizontal_scroll_bar_type (n, r->horizontal_scroll_bar_type);
+    }
 
   /* Directly assign orthogonal coordinates and sizes.  */
   if (horflag)
@@ -5260,6 +5377,7 @@ set correctly.  See the code of `split-window' for how this is done.  */)
 	sum = sum + XFIXNUM (c->new_total);
       c = NILP (c->next) ? 0 : XWINDOW (c->next);
     }
+
   wset_new_total (n, make_fixnum ((horflag
 				   ? p->total_cols
 				   : p->total_lines)
@@ -5267,10 +5385,30 @@ set correctly.  See the code of `split-window' for how this is done.  */)
   wset_new_normal (n, normal_size);
 
   block_input ();
+
+  if (dead)
+    {
+      /* Get dead window back its old buffer and markers.  */
+      wset_buffer (n, n->old_buffer);
+      set_marker_restricted
+	(n->start, make_fixnum (XMARKER (n->start)->charpos), n->contents);
+      set_marker_restricted
+	(n->pointm, make_fixnum (XMARKER (n->pointm)->charpos), n->contents);
+      set_marker_restricted
+	(n->old_pointm, make_fixnum (XMARKER (n->old_pointm)->charpos),
+	 n->contents);
+
+      Vwindow_list = Qnil;
+      /* Remove window from the table of dead windows.  */
+      Fremhash (make_fixnum (n->sequence_number),
+		window_dead_windows_table);
+    }
+
   window_resize_apply (p, horflag);
   adjust_frame_glyphs (f);
-  /* Set buffer of NEW to buffer of reference window.  */
+
   set_window_buffer (new, r->contents, true, true);
+
   FRAME_WINDOW_CHANGE (f) = true;
   unblock_input ();
 
@@ -5368,6 +5506,8 @@ Signal an error when WINDOW is the only window on its frame.  */)
 	}
       else
 	{
+	  /* Store WINDOW's buffer in old_buffer.  */
+	  wset_old_buffer (w, w->contents);
 	  unshow_buffer (w);
 	  unchain_marker (XMARKER (w->pointm));
 	  unchain_marker (XMARKER (w->old_pointm));
@@ -5507,7 +5647,7 @@ grow_mini_window (struct window *w, int delta)
       struct window *r = XWINDOW (root);
       Lisp_Object grow;
 
-      grow = call3 (Qwindow__resize_root_window_vertically,
+      grow = calln (Qwindow__resize_root_window_vertically,
 		    root, make_fixnum (- delta), Qt);
 
       if (FIXNUMP (grow)
@@ -5545,7 +5685,7 @@ shrink_mini_window (struct window *w)
       struct window *r = XWINDOW (root);
       Lisp_Object grow;
 
-      grow = call3 (Qwindow__resize_root_window_vertically,
+      grow = calln (Qwindow__resize_root_window_vertically,
 		    root, make_fixnum (delta), Qt);
 
       if (FIXNUMP (grow) && window_resize_check (r, false))
@@ -7356,7 +7496,7 @@ the return value is nil.  Otherwise the value is t.  */)
 	      && (NILP (Fminibufferp (p->buffer, Qnil))))
 	    /* If a window we restore gets another buffer, record the
 	       window's old buffer.  */
-	    call1 (Qrecord_window_buffer, window);
+	    calln (Qrecord_window_buffer, window);
 	}
 
       /* Disallow set_window_size_hook, temporarily.  */
@@ -7527,10 +7667,10 @@ the return value is nil.  Otherwise the value is t.  */)
 	      w->start_at_line_beg = true;
 	      if (FUNCTIONP (window_restore_killed_buffer_windows)
 		  && !MINI_WINDOW_P (w))
-		kept_windows = Fcons (listn (6, window, p->buffer,
-					     Fmarker_last_position (p->start),
-					     Fmarker_last_position (p->pointm),
-					     p->dedicated, Qt),
+		kept_windows = Fcons (list (window, p->buffer,
+					    Fmarker_last_position (p->start),
+					    Fmarker_last_position (p->pointm),
+					    p->dedicated, Qt),
 				      kept_windows);
 	    }
 	  else if (!NILP (w->start))
@@ -7552,10 +7692,10 @@ the return value is nil.  Otherwise the value is t.  */)
 		{
 		  if (FUNCTIONP (window_restore_killed_buffer_windows))
 		    kept_windows
-		      = Fcons (listn (6, window, p->buffer,
-				      Fmarker_last_position (p->start),
-				      Fmarker_last_position (p->pointm),
-				      p->dedicated, Qnil),
+		      = Fcons (list (window, p->buffer,
+				     Fmarker_last_position (p->start),
+				     Fmarker_last_position (p->pointm),
+				     p->dedicated, Qnil),
 			       kept_windows);
 		  else if (EQ (window_restore_killed_buffer_windows, Qdelete)
 			   || (!NILP (p->dedicated)
@@ -7712,6 +7852,8 @@ delete_all_child_windows (Lisp_Object window)
     }
   else if (BUFFERP (w->contents))
     {
+      /* Store WINDOW's buffer in old_buffer.  */
+      wset_old_buffer (w, w->contents);
       unshow_buffer (w);
       unchain_marker (XMARKER (w->pointm));
       unchain_marker (XMARKER (w->old_pointm));
@@ -8639,6 +8781,8 @@ init_window_once (void)
 
   minibuf_selected_window = Qnil;
   staticpro (&minibuf_selected_window);
+  last_mouse_window = Qnil;
+  staticpro (&last_mouse_window);
   old_selected_window = Qnil;
   staticpro (&old_selected_window);
 
@@ -8657,6 +8801,7 @@ static void init_window_once_for_pdumper (void)
   PDUMPER_RESET_LV (selected_window, Qnil);
   PDUMPER_RESET_LV (Vwindow_list, Qnil);
   PDUMPER_RESET_LV (minibuf_selected_window, Qnil);
+  PDUMPER_RESET_LV (last_mouse_window, Qnil);
 
   /* Hack: if mode_line_in_non_selected_windows is true (which it may
      be, if we're restoring from a dump) the guts of
@@ -9064,12 +9209,23 @@ displayed after a scrolling operation to be somewhat inaccurate.  */);
     doc: /* Hash table of dead windows.
 Each entry in this table maps a window number to a window object.
 Entries are added by `delete-window-internal' and are removed by the
-garbage collector.
-
-This table is maintained by code in window.c and is made visible in
-Elisp for testing purposes only.  */);
+garbage collector.  */);
   window_dead_windows_table
-    = CALLN (Fmake_hash_table, QCweakness, Qt);
+    = CALLN (Fmake_hash_table, QCweakness, Qvalue);
+
+  DEFVAR_BOOL ("window-auto-redraw-on-parameter-change",
+	       window_auto_redraw_on_parameter_change,
+	       doc: /* When non-nil, redraw based on face filters.
+When this variable is non-nil, force a potentially expensive redraw when
+a window parameter named in a `:window' expression for ':filtered'
+changes.  This redraw is necessary for correctness; this variable is an
+escape hatch to recover performance in the case that our assumption that
+these parameter changes are rare does not hold.
+
+You can also inhibit the automatic redraw for a specific window
+parameter by setting the `:filtered` symbol property of the parameter
+name to `'ignore'.  */);
+  window_auto_redraw_on_parameter_change = true;
 
   defsubr (&Sselected_window);
   defsubr (&Sold_selected_window);

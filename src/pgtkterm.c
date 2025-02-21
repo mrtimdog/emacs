@@ -1,6 +1,6 @@
 /* Communication module for window systems using GTK.
 
-Copyright (C) 1989, 1993-1994, 2005-2006, 2008-2024 Free Software
+Copyright (C) 1989, 1993-1994, 2005-2006, 2008-2025 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -21,6 +21,11 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 /* This should be the first include, as it may set up #defines affecting
    interpretation of even the system includes. */
 #include <config.h>
+
+/* Work around GCC bug 102671.  */
+#if 10 <= __GNUC__
+# pragma GCC diagnostic ignored "-Wanalyzer-null-dereference"
+#endif
 
 #include <cairo.h>
 #include <fcntl.h>
@@ -153,8 +158,6 @@ pgtk_enumerate_devices (struct pgtk_display_info *dpyinfo,
   struct pgtk_device_t *rec;
   GList *all_seats, *devices_on_seat, *tem, *t1;
   GdkSeat *seat;
-  char printbuf[1026]; /* Believe it or not, some device names are
-			  actually almost this long.  */
 
   block_input ();
   all_seats = gdk_display_list_seats (dpyinfo->gdpy);
@@ -181,13 +184,28 @@ pgtk_enumerate_devices (struct pgtk_display_info *dpyinfo,
 	{
 	  rec = xmalloc (sizeof *rec);
 	  rec->seat = g_object_ref (seat);
-	  rec->device = GDK_DEVICE (t1->data);
 
-	  snprintf (printbuf, 1026, "%u:%s",
-		    gdk_device_get_source (rec->device),
-		    gdk_device_get_name (rec->device));
+	  if (t1->data)
+	    {
+	      GdkInputSource source;
+	      const char *name;
 
-	  rec->name = build_string (printbuf);
+	      rec->device = GDK_DEVICE (t1->data);
+	      source = gdk_device_get_source (rec->device);
+	      name = gdk_device_get_name (rec->device);
+	      rec->name = make_formatted_string ("%u:%s", source, name);
+	    }
+	  else
+	    {
+	      /* GTK bug 7737 results in GDK seats being initialized
+		 with NULL devices in some cirumstances.  As events will
+		 presumably also be delivered with their device fields
+		 set to NULL, insert a ersatz device record associated
+		 with NULL.  (bug#76239) */
+	      rec->device = NULL;
+	      rec->name = build_string ("0:unknown device");
+	    }
+
 	  rec->next = dpyinfo->devices;
 	  dpyinfo->devices = rec;
 	}
@@ -552,12 +570,12 @@ pgtk_calc_absolute_position (struct frame *f)
 
   /* We have nothing to do if the current position
      is already for the top-left corner.  */
-  if (! ((flags & XNegative) || (flags & YNegative)))
+  if (!((flags & XNegative) || (flags & YNegative)))
     return;
 
   /* Treat negative positions as relative to the leftmost bottommost
      position that fits on the screen.  */
-  if ((flags & XNegative) && (f->left_pos <= 0))
+  if (flags & XNegative)
     {
       int width = FRAME_PIXEL_WIDTH (f);
 
@@ -584,7 +602,7 @@ pgtk_calc_absolute_position (struct frame *f)
 
     }
 
-  if ((flags & YNegative) && (f->top_pos <= 0))
+  if (flags & YNegative)
     {
       int height = FRAME_PIXEL_HEIGHT (f);
 
@@ -5937,7 +5955,6 @@ motion_notify_event (GtkWidget *widget, GdkEvent *event,
 	     also when the target window is on another frame.  */
 	  && (f == XFRAME (selected_frame) || !NILP (focus_follows_mouse)))
 	{
-	  static Lisp_Object last_mouse_window;
 	  Lisp_Object window = window_from_coordinates
 	    (f, event->motion.x, event->motion.y, 0, false, false, false);
 
@@ -7003,7 +7020,7 @@ pgtk_term_init (Lisp_Object display_name, char *resource_name)
   GdkDisplay *dpy;
   struct terminal *terminal;
   struct pgtk_display_info *dpyinfo;
-  static int x_initialized = 0;
+  static bool x_initialized;
   static unsigned x_display_id = 0;
   static char *initial_display = NULL;
   char *dpy_name;
@@ -7014,6 +7031,7 @@ pgtk_term_init (Lisp_Object display_name, char *resource_name)
 
   block_input ();
 
+  bool was_initialized = x_initialized;
   if (!x_initialized)
     {
       any_help_event_p = false;
@@ -7024,8 +7042,7 @@ pgtk_term_init (Lisp_Object display_name, char *resource_name)
 #ifdef USE_CAIRO
       gui_init_fringe (&pgtk_redisplay_interface);
 #endif
-
-      ++x_initialized;
+      x_initialized = true;
     }
 
   dpy_name = SSDATA (display_name);
@@ -7040,7 +7057,7 @@ pgtk_term_init (Lisp_Object display_name, char *resource_name)
     char **argv2 = argv;
     guint id;
 
-    if (x_initialized++ > 1)
+    if (was_initialized)
       {
 	xg_display_open (dpy_name, &dpy);
       }
@@ -7069,13 +7086,10 @@ pgtk_term_init (Lisp_Object display_name, char *resource_name)
 	id = g_log_set_handler ("GLib", G_LOG_LEVEL_WARNING | G_LOG_FLAG_FATAL
 				| G_LOG_FLAG_RECURSION, my_log_handler, NULL);
 
-	/* gtk_init does set_locale.  Fix locale before and after.  */
-	fixup_locale ();
+	gtk_disable_setlocale ();
 	unrequest_sigio ();	/* See comment in x_display_ok.  */
 	gtk_init (&argc, &argv2);
 	request_sigio ();
-	fixup_locale ();
-
 
         g_log_remove_handler ("GLib", id);
 
@@ -7083,7 +7097,7 @@ pgtk_term_init (Lisp_Object display_name, char *resource_name)
 
         dpy = DEFAULT_GDK_DISPLAY ();
 
-	initial_display = g_strdup (gdk_display_get_name (dpy));
+	initial_display = xstrdup (gdk_display_get_name (dpy));
 	dpy_name = initial_display;
 	lisp_dpy_name = build_string (dpy_name);
       }
@@ -7422,7 +7436,7 @@ syms_of_pgtkterm (void)
   DEFSYM (Qlatin_1, "latin-1");
 
   xg_default_icon_file
-    = build_pure_c_string ("icons/hicolor/scalable/apps/emacs.svg");
+    = build_string ("icons/hicolor/scalable/apps/emacs.svg");
   staticpro (&xg_default_icon_file);
 
   DEFSYM (Qx_gtk_map_stock, "x-gtk-map-stock");
@@ -7485,7 +7499,7 @@ If set to a non-float value, there will be no wait at all.  */);
 
   DEFVAR_LISP ("pgtk-keysym-table", Vpgtk_keysym_table,
     doc: /* Hash table of character codes indexed by X keysym codes.  */);
-  Vpgtk_keysym_table = make_hash_table (&hashtest_eql, 900, Weak_None, false);
+  Vpgtk_keysym_table = make_hash_table (&hashtest_eql, 900, Weak_None);
 
   window_being_scrolled = Qnil;
   staticpro (&window_being_scrolled);
@@ -7632,7 +7646,6 @@ pgtk_cr_export_frames (Lisp_Object frames, cairo_surface_type_t surface_type)
   Lisp_Object acc = Qnil;
   specpdl_ref count = SPECPDL_INDEX ();
 
-  specbind (Qredisplay_dont_pause, Qt);
   redisplay_preserve_echo_area (31);
 
   f = XFRAME (XCAR (frames));

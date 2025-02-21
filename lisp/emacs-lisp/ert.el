@@ -1,6 +1,6 @@
 ;;; ert.el --- Emacs Lisp Regression Testing  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Christian Ohler <ohler@gnu.org>
 ;; Keywords: lisp, tools
@@ -576,7 +576,7 @@ Return nil if they are."
 
 (defun ert--significant-plist-keys (plist)
   "Return the keys of PLIST that have non-null values, in order."
-  (cl-assert (zerop (mod (length plist) 2)) t)
+  (cl-assert (evenp (length plist)) t)
   (cl-loop for (key value . rest) on plist by #'cddr
            unless (or (null value) (memq key accu)) collect key into accu
            finally (cl-return accu)))
@@ -587,8 +587,8 @@ Return nil if they are."
 Returns nil if they are equivalent, i.e., have the same value for
 each key, where absent values are treated as nil.  The order of
 key/value pairs in each list does not matter."
-  (cl-assert (zerop (mod (length a) 2)) t)
-  (cl-assert (zerop (mod (length b) 2)) t)
+  (cl-assert (evenp (length a)) t)
+  (cl-assert (evenp (length b)) t)
   ;; Normalizing the plists would be another way to do this but it
   ;; requires a total ordering on all lisp objects (since any object
   ;; is valid as a text property key).  Perhaps defining such an
@@ -1355,7 +1355,7 @@ RESULT must be an `ert-test-result-with-condition'."
   (when-let* ((loc
                (ignore-errors
                  (find-function-search-for-symbol
-                  (ert-test-name test) 'ert-deftest (ert-test-file-name test)))))
+                  (ert-test-name test) 'ert--test (ert-test-file-name test)))))
     (let* ((buffer (car loc))
            (point (cdr loc))
            (file (file-relative-name (buffer-file-name buffer)))
@@ -1419,7 +1419,7 @@ Returns the stats object."
                          (message "%9s  %S%s"
                                   (ert-string-for-test-result result nil)
                                   (ert-test-name test)
-                                  (if (cl-plusp
+                                  (if (plusp
                                        (length (getenv "EMACS_TEST_VERBOSE")))
                                       (ert-reason-for-test-result result)
                                     ""))))
@@ -1432,7 +1432,7 @@ Returns the stats object."
                          (message "%9s  %S%s"
                                   (ert-string-for-test-result result nil)
                                   (ert-test-name test)
-                                  (if (cl-plusp
+                                  (if (plusp
                                        (length (getenv "EMACS_TEST_VERBOSE")))
                                       (ert-reason-for-test-result result)
                                     ""))))
@@ -2123,7 +2123,7 @@ non-nil, returns the face for expected results.."
 (defun ert-face-for-stats (stats)
   "Return a face that represents STATS."
   (cond ((ert--stats-aborted-p stats) 'nil)
-        ((cl-plusp (ert-stats-completed-unexpected stats))
+        ((plusp (ert-stats-completed-unexpected stats))
          (ert-face-for-test-result nil))
         ((eql (ert-stats-completed-expected stats) (ert-stats-total stats))
          (ert-face-for-test-result t))
@@ -2467,7 +2467,9 @@ To be used in the ERT results buffer."
 
 (defun ert--test-name-button-action (button)
   "Find the definition of the test BUTTON belongs to, in another window."
-  (let ((name (button-get button 'ert-test-name)))
+  ;; work with either ert-insert-test-name-button or help-xref-button
+  (let ((name (or (button-get button 'ert-test-name)
+                  (car (button-get button 'help-args)))))
     (ert-find-test-other-window name)))
 
 (defun ert--ewoc-position (ewoc node)
@@ -2814,7 +2816,8 @@ To be used in the ERT results buffer."
                                       (file-name-nondirectory file-name)))
               (save-excursion
                 (re-search-backward (substitute-command-keys "`\\([^`']+\\)'"))
-                (help-xref-button 1 'help-function-def test-name file-name)))
+                (help-xref-button 1 'ert--test-name-button
+                                  test-name file-name)))
             (insert ".")
             (fill-region-as-paragraph (point-min) (point))
             (insert "\n\n")
@@ -2853,13 +2856,15 @@ To be used in the ERT results buffer."
                                   (ert--tests-running-mode-line-indicator))))
 (add-hook 'emacs-lisp-mode-hook #'ert--activate-font-lock-keywords)
 
-(defun ert--unload-function ()
+(defun ert-unload-function ()
   "Unload function to undo the side-effects of loading ert.el."
-  (ert--remove-from-list 'find-function-regexp-alist 'ert-deftest :key #'car)
+  (ert--remove-from-list 'find-function-regexp-alist 'ert--test :key #'car)
   (ert--remove-from-list 'minor-mode-alist 'ert--current-run-stats :key #'car)
   (ert--remove-from-list 'emacs-lisp-mode-hook
                          'ert--activate-font-lock-keywords)
   nil)
+
+;;; erts files.
 
 (defun ert-test-erts-file (file &optional transform)
   "Parse FILE as a file containing before/after parts (an erts file).
@@ -2987,15 +2992,14 @@ write erts files."
           (forward-line 1)))
       (nreverse specs))))
 
-(defvar ert-unload-hook ())
-(add-hook 'ert-unload-hook #'ert--unload-function)
-
 ;;; Obsolete
 
 (define-obsolete-function-alias 'ert-equal-including-properties
   #'equal-including-properties "29.1")
 (put 'ert-equal-including-properties 'ert-explainer
      'ert--explain-equal-including-properties)
+
+(define-obsolete-function-alias 'ert--unload-function 'ert-unload-function "31.1")
 
 (provide 'ert)
 

@@ -1,6 +1,6 @@
 ;;; org-capture.el --- Fast note taking in Org       -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, text
@@ -1100,7 +1100,7 @@ Store them in the capture property list."
                     (org-encode-time
                      (apply #'list
                             0 0 org-extend-today-until
-                            (cl-cdddr (decode-time prompt-time))))))
+                            (cdddr (decode-time prompt-time))))))
 		 (time-to-days prompt-time)))
 	      (t
 	       ;; Current date, possibly corrected for late night
@@ -1920,7 +1920,7 @@ placeholder to check."
     (goto-char (match-beginning 0))
     (let ((n (abs (skip-chars-backward "\\\\"))))
       (delete-char (/ (1+ n) 2))
-      (= (% n 2) 1))))
+      (cl-oddp n))))
 
 (defun org-capture-expand-embedded-elisp (&optional mark)
   "Evaluate embedded elisp %(sexp) and replace with the result.

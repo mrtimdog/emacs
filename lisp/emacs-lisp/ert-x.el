@@ -1,6 +1,6 @@
 ;;; ert-x.el --- Staging area for experimental extensions to ERT  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008, 2010-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2008, 2010-2025 Free Software Foundation, Inc.
 
 ;; Author: Lennart Borgman (lennart O borgman A gmail O com)
 ;;         Christian Ohler <ohler@gnu.org>
@@ -260,7 +260,7 @@ structure with the plists in ARGS."
                (string (let ((begin (point)))
                          (insert x)
                          (set-text-properties begin (point) current-plist)))
-               (list (unless (zerop (mod (length x) 2))
+               (list (unless (evenp (length x))
                        (error "Odd number of args in plist: %S" x))
                      (setq current-plist x))))
     (buffer-string)))
@@ -526,11 +526,7 @@ The same keyword arguments are supported as in
 
 (defun ert-gcc-is-clang-p ()
   "Return non-nil if the `gcc' command actually runs the Clang compiler."
-  ;; Some macOS machines run llvm when you type gcc.  (!)
-  ;; We can't even check if it's a symlink; it's a binary placed in
-  ;; "/usr/bin/gcc".  So we need to check the output.
-  (string-match "Apple \\(LLVM\\|[Cc]lang\\)\\|Xcode\\.app"
-                (shell-command-to-string "gcc --version")))
+  (internal--gcc-is-clang-p))
 
 (defvar tramp-default-host-alist)
 (defvar tramp-methods)

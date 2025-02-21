@@ -1,6 +1,6 @@
 /* X Communication module for terminals which understand the X protocol.
 
-Copyright (C) 1989, 1993-2024 Free Software Foundation, Inc.
+Copyright (C) 1989, 1993-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -4121,10 +4121,10 @@ x_dnd_send_unsupported_drop (struct x_display_info *dpyinfo, Window target_windo
   x_dnd_unsupported_drop_time = before;
   x_dnd_unsupported_drop_window = target_window;
   x_dnd_unsupported_drop_data
-    = listn (5, assq_no_quit (QXdndSelection,
-			      dpyinfo->terminal->Vselection_alist),
-	     targets, arg, make_fixnum (root_x),
-	     make_fixnum (root_y));
+    = list (assq_no_quit (QXdndSelection,
+			  dpyinfo->terminal->Vselection_alist),
+	    targets, arg, make_fixnum (root_x),
+	    make_fixnum (root_y));
 
   x_dnd_waiting_for_finish = true;
   x_dnd_finish_display = dpyinfo->display;
@@ -6369,7 +6369,6 @@ x_cr_export_frames (Lisp_Object frames, cairo_surface_type_t surface_type)
   Lisp_Object acc = Qnil;
   specpdl_ref count = SPECPDL_INDEX ();
 
-  specbind (Qredisplay_dont_pause, Qt);
   redisplay_preserve_echo_area (31);
 
   f = XFRAME (XCAR (frames));
@@ -13096,7 +13095,7 @@ x_dnd_begin_drag_and_drop (struct frame *f, Time time, Atom xaction,
 
 		  ref = SPECPDL_INDEX ();
 		  record_unwind_protect_ptr (x_dnd_cleanup_drag_and_drop, f);
-		  call2 (Vx_dnd_movement_function, frame_object,
+		  calln (Vx_dnd_movement_function, frame_object,
 			 Fposn_at_x_y (x, y, frame_object, Qnil));
 		  x_dnd_unwind_flag = false;
 		  unbind_to (ref, Qnil);
@@ -13130,7 +13129,7 @@ x_dnd_begin_drag_and_drop (struct frame *f, Time time, Atom xaction,
 
 		  ref = SPECPDL_INDEX ();
 		  record_unwind_protect_ptr (x_dnd_cleanup_drag_and_drop, f);
-		  call4 (Vx_dnd_wheel_function,
+		  calln (Vx_dnd_wheel_function,
 			 Fposn_at_x_y (x, y, frame_object, Qnil),
 			 make_fixnum (x_dnd_wheel_button),
 			 make_uint (x_dnd_wheel_state),
@@ -13199,7 +13198,7 @@ x_dnd_begin_drag_and_drop (struct frame *f, Time time, Atom xaction,
 	      record_unwind_protect_ptr (x_dnd_cleanup_drag_and_drop, f);
 
 	      if (!NILP (Vx_dnd_unsupported_drop_function))
-		val = call8 (Vx_dnd_unsupported_drop_function,
+		val = calln (Vx_dnd_unsupported_drop_function,
 			     XCAR (XCDR (x_dnd_unsupported_drop_data)),
 			     Fnth (make_fixnum (3), x_dnd_unsupported_drop_data),
 			     Fnth (make_fixnum (4), x_dnd_unsupported_drop_data),
@@ -15466,7 +15465,7 @@ xt_action_hook (Widget widget, XtPointer client_data, String action_name,
 
   if (scroll_bar_p
       && strcmp (action_name, end_action) == 0
-      && WINDOWP (window_being_scrolled))
+      && WINDOW_LIVE_P (window_being_scrolled))
     {
       struct window *w;
       struct scroll_bar *bar;
@@ -21292,8 +21291,6 @@ handle_one_xevent (struct x_display_info *dpyinfo,
 		&& (f == XFRAME (selected_frame)
 		    || !NILP (focus_follows_mouse)))
 	      {
-		static Lisp_Object last_mouse_window;
-
 		if (xmotion.window != FRAME_X_WINDOW (f))
 		  {
 		    x_translate_coordinates (f, xmotion.x_root, xmotion.y_root,
@@ -23232,7 +23229,6 @@ handle_one_xevent (struct x_display_info *dpyinfo,
 		      && (f == XFRAME (selected_frame)
 			  || !NILP (focus_follows_mouse)))
 		    {
-		      static Lisp_Object last_mouse_window;
 		      Lisp_Object window = window_from_coordinates (f, ev.x, ev.y, 0, false, false,
 								    false);
 
@@ -27124,11 +27120,13 @@ x_error_quitter (Display *display, XErrorEvent *event)
 static int NO_INLINE
 x_io_error_quitter (Display *display)
 {
-  char buf[256];
-
-  snprintf (buf, sizeof buf, "Connection lost to X server '%s'",
-	    DisplayString (display));
+  char const *server = DisplayString (display);
+  static char const fmt[] = "Connection lost to X server '%s'";
+  USE_SAFE_ALLOCA;
+  char *buf = SAFE_ALLOCA (sizeof fmt - sizeof "%s" + strlen (server) + 1);
+  sprintf (buf, fmt, server);
   x_connection_closed (display, buf, true);
+  SAFE_FREE ();
 
   return 0;
 }
@@ -27514,7 +27512,7 @@ x_calc_absolute_position (struct frame *f)
 
   /* Treat negative positions as relative to the leftmost bottommost
      position that fits on the screen.  */
-  if ((flags & XNegative) && (f->left_pos <= 0))
+  if (flags & XNegative)
     {
       int width = FRAME_PIXEL_WIDTH (f);
 
@@ -27541,7 +27539,7 @@ x_calc_absolute_position (struct frame *f)
 
     }
 
-  if ((flags & YNegative) && (f->top_pos <= 0))
+  if (flags & YNegative)
     {
       int height = FRAME_PIXEL_HEIGHT (f);
 
@@ -30381,7 +30379,7 @@ static bool x_timeout_atimer_activated_flag;
 
 #endif /* USE_X_TOOLKIT */
 
-static int x_initialized;
+static bool x_initialized;
 
 /* Test whether two display-name strings agree up to the dot that separates
    the screen number from the server number.  */
@@ -30593,10 +30591,13 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
 
   block_input ();
 
+#ifdef USE_GTK
+  bool was_initialized = x_initialized;
+#endif /* USE_GTK */
   if (!x_initialized)
     {
       x_initialize ();
-      ++x_initialized;
+      x_initialized = true;
     }
 
 #if defined USE_X_TOOLKIT || defined USE_GTK
@@ -30614,7 +30615,7 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
     char **argv2 = argv;
     guint id;
 
-    if (x_initialized++ > 1)
+    if (was_initialized)
       {
         xg_display_open (SSDATA (display_name), &dpy);
       }
@@ -30649,8 +30650,7 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
            Call before gtk_init so Gtk+ event filters comes after our.  */
         gdk_window_add_filter (NULL, event_handler_gdk, NULL);
 
-        /* gtk_init does set_locale.  Fix locale before and after.  */
-        fixup_locale ();
+        gtk_disable_setlocale ();
         unrequest_sigio (); /* See comment in x_display_ok.  */
         gtk_init (&argc, &argv2);
         request_sigio ();
@@ -30659,8 +30659,7 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
 
         xg_initialize ();
 
-	/* Do this after the call to xg_initialize, because when
-	   Fontconfig is used, xg_initialize calls its initialization
+	/* When Fontconfig is used, xg_initialize calls its initialization
 	   function which in some versions of Fontconfig calls setlocale.  */
 	fixup_locale ();
 
@@ -32590,7 +32589,7 @@ syms_of_xterm (void)
   DEFSYM (Qwheel_right, "wheel-right");
 
 #ifdef USE_GTK
-  xg_default_icon_file = build_pure_c_string ("icons/hicolor/scalable/apps/emacs.svg");
+  xg_default_icon_file = build_string ("icons/hicolor/scalable/apps/emacs.svg");
   staticpro (&xg_default_icon_file);
 
   DEFSYM (Qx_gtk_map_stock, "x-gtk-map-stock");
@@ -32739,7 +32738,7 @@ If set to a non-float value, there will be no wait at all.  */);
 
   DEFVAR_LISP ("x-keysym-table", Vx_keysym_table,
     doc: /* Hash table of character codes indexed by X keysym codes.  */);
-  Vx_keysym_table = make_hash_table (&hashtest_eql, 900, Weak_None, false);
+  Vx_keysym_table = make_hash_table (&hashtest_eql, 900, Weak_None);
 
   DEFVAR_BOOL ("x-frame-normalize-before-maximize",
 	       x_frame_normalize_before_maximize,

@@ -1,6 +1,6 @@
 ;;; emoji.el --- Inserting emojis  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2021-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: fun
@@ -222,7 +222,7 @@ the name is not known."
       (cl-loop for i from 0
                for glyph in alist
                do
-               (when (and (cl-plusp i)
+               (when (and (plusp i)
                           (zerop (mod i width)))
                  (insert "\n"))
                (insert
@@ -663,27 +663,24 @@ We prefer the earliest unique letter."
          (name
           (completing-read
            "Insert emoji: "
-           (lambda (string pred action)
-	     (if (eq action 'metadata)
-		 (list 'metadata
-		       (cons
-                        'affixation-function
-                        ;; Add the glyphs to the start of the displayed
-                        ;; strings when TAB-ing.
-                        (lambda (strings)
-                          (mapcar
-                           (lambda (name)
-                             (if emoji-alternate-names
-                                 (list name "" "")
-                               (list name
-                                     (concat
-                                      (or (gethash name emoji--all-bases) " ")
-                                      "\t")
-                                     "")))
-                           strings))))
-	       (complete-with-action action table string pred)))
+           (completion-table-with-metadata
+            table
+            `((affixation-function
+               ;; Add the glyphs to the start of the displayed
+               ;; strings when TAB-ing.
+               . ,(lambda (strings)
+                    (mapcar
+                     (lambda (name)
+                       (if emoji-alternate-names
+                           (list name "" "")
+                         (list name
+                               (concat
+                                (or (gethash name emoji--all-bases) " ")
+                                "\t")
+                               "")))
+                     strings)))))
            nil t)))
-    (if (cl-plusp (length name))
+    (if (plusp (length name))
         (let ((glyph (if emoji-alternate-names
                          (cadr (split-string name "\t"))
                        (gethash name emoji--all-bases))))

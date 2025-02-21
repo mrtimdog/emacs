@@ -1,5 +1,5 @@
 /* xftfont.c -- XFT font driver.
-   Copyright (C) 2006-2024 Free Software Foundation, Inc.
+   Copyright (C) 2006-2025 Free Software Foundation, Inc.
    Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H13PRO009
@@ -810,7 +810,7 @@ do not actually have glyphs with colors that can cause Xft crashes.
 
 The font families in this list will not be ignored when
 `xft-ignore-color-fonts' is non-nil.  */);
-  Vxft_color_font_whitelist = list1 (build_pure_c_string ("Source Code Pro"));
+  Vxft_color_font_whitelist = list1 (build_string ("Source Code Pro"));
 
   pdumper_do_now_and_after_load (syms_of_xftfont_for_pdumper);
 }

@@ -1,6 +1,6 @@
 ;;; mpc.el --- A client for the Music Player Daemon   -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: multimedia
@@ -310,13 +310,15 @@ PORT defaults to 6600 and HOST defaults to localhost."
 (defconst mpc--proc-alist-to-alists-starters '(file directory))
 
 (defun mpc--proc-alist-to-alists (alist)
+  ;; ALIST is assumed to contain a flattened sequence of sequences,
+  ;; of the form (file . ..) ..filedata.. (directory . ..) ..dirdata..
+  ;; See bug#41493.
   (cl-assert (or (null alist)
               (memq (caar alist) mpc--proc-alist-to-alists-starters)))
-  (let ((starter (caar alist))
-        (alists ())
+  (let ((alists ())
         tmp)
     (dolist (pair alist)
-      (when (eq (car pair) starter)
+      (when (memq (car pair) mpc--proc-alist-to-alists-starters)
         (if tmp (push (nreverse tmp) alists))
         (setq tmp ()))
       (push pair tmp))
@@ -638,15 +640,15 @@ The songs are returned as alists."
                  (mpc-proc-buf-to-alists
                   (mpc-proc-cmd (list "search" "any" value))))
                 ((eq tag 'Directory)
-                 (let ((pairs
-                        (mpc-proc-buf-to-alist
+                 (let ((entries
+                        (mpc-proc-buf-to-alists
                          (mpc-proc-cmd (list "listallinfo" value)))))
-                   (mpc--proc-alist-to-alists
-                    ;; Strip away the `directory' entries.
-                    (delq nil (mapcar (lambda (pair)
-                                        (if (eq (car pair) 'directory)
-                                            nil pair))
-                                      pairs)))))
+                   ;; Strip away the `directory' entries because our callers
+                   ;; currently don't know what to do with them.
+                   (delq nil (mapcar (lambda (entry)
+                                       (if (eq (caar entry) 'directory)
+                                           nil entry))
+                                     entries))))
                 ((string-match "|" (symbol-name tag))
                  (add-to-list 'mpc--find-memoize-union-tags tag)
                  (let ((tag1 (intern (substring (symbol-name tag)
@@ -1210,6 +1212,7 @@ string POST."
      :selected (alist-get 'xfade mpc-status)]
     "--"
     ["Add new browser" mpc-tagbrowser]
+    ["Server Stats" mpc-server-stats]
     ["Update DB" mpc-update]
     ["Quit" mpc-quit]))
 
@@ -2836,7 +2839,7 @@ will be used.  See `mpc-format' for the definition of FORMAT-SPEC."
 
 (defcustom mpc-notifications-body
   '("%{Artist}" "%{AlbumArtist}" "Unknown Artist")
-  "List of FORMAT-SPEC used in the notification body.
+  "List of FORMAT-SPECs used in the notification body.
 
 The first element in the list that expands to a non-empty string
 will be used.  See `mpc-format' for the definition of FORMAT-SPEC."
@@ -2872,17 +2875,17 @@ will be used.  See `mpc-format' for the definition of FORMAT-SPEC."
 
 ;;; Song Viewer ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defface mpc-song-viewer-value
+(defface mpc-table-value
   '((t (:inherit vtable)))
-  "Face for tag values in the MPC song viewer.")
+  "Face for values in MPC tables.")
 
-(defface mpc-song-viewer-tag
-  '((t (:inherit (mpc-song-viewer-value bold))))
-  "Face for tag types in the MPC song viewer.")
+(defface mpc-table-key
+  '((t (:inherit (mpc-table-value bold))))
+  "Face for keys in MPC tables.")
 
-(defface mpc-song-viewer-empty
-  '((t (:inherit (mpc-song-viewer-value italic shadow))))
-  "Face for empty tag values in the MPC song viewer.")
+(defface mpc-table-empty
+  '((t (:inherit (mpc-table-value italic shadow))))
+  "Face for empty values in MPC tables.")
 
 (defcustom mpc-song-viewer-tags
   '("Title" "Artist" "Album" "Performer" "Composer"
@@ -2927,15 +2930,15 @@ playing song is displayed."
                         :min-width 3
                         :displayer
                         (lambda (tag &rest _)
-                          (propertize tag 'face 'mpc-song-viewer-tag)))
+                          (propertize tag 'face 'mpc-table-key)))
                       ( :name "Value"
                         :align left
                         :min-width 5
                         :displayer
                         (lambda (value &rest _)
                           (if (and value (not (string-blank-p value)))
-                              (propertize value 'face 'mpc-song-viewer-value)
-                            (propertize "empty" 'face 'mpc-song-viewer-empty)))))
+                              (propertize value 'face 'mpc-table-value)
+                            (propertize "empty" 'face 'mpc-table-empty)))))
            :objects (mapcar
                      (lambda (tag)
                        (pcase tag
@@ -2961,6 +2964,56 @@ playing song is displayed."
       (pop-to-buffer buffer '((display-buffer-reuse-window
                                display-buffer-same-window)
                               (reusable-frames . t))))))
+
+;;; Stats viewer ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defvar mpc--server-stats-date "%c"
+  "Format used for dates in `mpc-server-stats'.
+See `format-time-string' for formatting details.")
+
+(defvar mpc--server-stats-duration "%Y, %D, %z%h:%.2m:%.2s"
+  "Format used for durations in `mpc-server-stats'.
+See `format-seconds' for formatting details.")
+
+(defun mpc--server-stats-date (seconds)
+  "Format SECONDS as a date for display by `mpc-server-stats'."
+  (format-time-string mpc--server-stats-date (string-to-number seconds)))
+
+(defun mpc--server-stats-duration (seconds)
+  "Format SECONDS as a duration for display by `mpc-server-stats'."
+  (format-seconds mpc--server-stats-duration (string-to-number seconds)))
+
+(defun mpc--server-stats-format (stat)
+  "Format STAT data for display by `mpc-server-stats'."
+  (let ((key (seq-reduce (lambda (string from-to)
+                           (string-replace (car from-to) (cdr from-to) string))
+                         '(("Db_" . "DB_") ("_" . " "))
+                         (capitalize (symbol-name (car stat)))))
+        (val (cdr stat)))
+    (list key (cond
+               ((string-match-p "time\\'" key) (mpc--server-stats-duration val))
+               ((string-match-p "date\\'" key) (mpc--server-stats-date val))
+               (t val)))))
+
+(defun mpc-server-stats ()
+  "Display stats about the connected MPD server."
+  (interactive)
+  (let ((buffer "*MPC Stats Viewer*"))
+    (with-current-buffer (get-buffer-create buffer)
+      (special-mode)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (make-vtable
+         :columns '((:name "Server Stats" :align right :min-width 10) "")
+         :formatter (lambda (value column &rest _)
+                      (propertize value 'face (if (= column 0)
+                                                  'mpc-table-key
+                                                'mpc-table-value)))
+         :objects (mapcar #'mpc--server-stats-format
+                          (mpc-proc-cmd-to-alist (list "stats")))))
+      (pop-to-buffer buffer '((display-buffer-reuse-window)
+                              (reusable-frames . t)
+                              (window-height . 10))))))
 
 ;;; Toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

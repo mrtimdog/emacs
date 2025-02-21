@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1995, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Processes
@@ -3090,6 +3090,13 @@ listening on that port.  If @var{reuseaddr-flag} is @code{nil}, there
 may be a period of time after the last use of that port (by any
 process on the host) where it is not possible to make a new server on
 that port.
+
+@item :nodelay @var{nodelay-flag}
+If @var{nodelay-flag} is non-@code{nil}, the @code{TCP_NODELAY} option
+is enabled on the socket.  This disables the Nagle algorithm, meaning
+that network segments are sent as soon as possible, even when they
+contain little data.  This reduces network latency on the network
+connection, but can lead to many small packets being sent.
 @end table
 
 @defun set-network-process-option process option value &optional no-error
@@ -3159,7 +3166,7 @@ machine you are using.  The value is an alist whose elements have the
 form @code{(@var{ifname} . @var{address})}.  @var{ifname} is a string
 naming the interface, @var{address} has the same form as the
 @var{local-address} and @var{remote-address} arguments to
-@code{make-network-process}, i.e. a vector of integers.  By default
+@code{make-network-process}, i.e.@: a vector of integers.  By default
 both IPv4 and IPv6 addresses are returned if possible.
 
 Optional argument @var{full} non-@code{nil} means to instead return a

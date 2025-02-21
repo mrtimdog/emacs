@@ -1,6 +1,6 @@
 ;;; ox.el --- Export Framework for Org Mode          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2025 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Maintainer: Ihor Radchenko <yantar92 at posteo dot net>
@@ -1552,7 +1552,7 @@ Assume buffer is in Org mode.  Narrowing, if any, is ignored."
 		      (newline
 		       (mapconcat #'identity values "\n"))
 		      (split
-		       (cl-mapcan (lambda (v) (split-string v)) values))
+                       (cl-mapcan #'split-string values))
 		      ((t)
 		       (org-last values))
 		      (otherwise
@@ -7287,14 +7287,14 @@ back to standard interface."
 			     (lambda (sub-entry)
 			       (cl-incf index)
 			       (format
-				(if (zerop (mod index 2)) "    [%s] %-26s"
+				(if (cl-evenp index) "    [%s] %-26s"
 				  "[%s] %s\n")
 				(funcall fontify-key
 					 (char-to-string (car sub-entry))
 					 top-key)
 				(nth 1 sub-entry)))
 			     sub-menu "")
-			    (when (zerop (mod index 2)) "\n"))))))))
+			    (when (cl-evenp index) "\n"))))))))
 		entries ""))
 	     ;; Publishing menu is hard-coded.
 	     (format "\n[%s] Publish

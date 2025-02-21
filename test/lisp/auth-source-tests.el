@@ -1,6 +1,6 @@
 ;;; auth-source-tests.el --- Tests for auth-source.el  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2025 Free Software Foundation, Inc.
 
 ;; Author: Damien Cassou <damien@cassou.me>,
 ;;         Nicolas Petton <nicolas@petton.fr>
@@ -468,7 +468,7 @@ machine c1 port c2 user c3 password c4\n"
                  ;; Arguments must be all strings.
                  (should (cl-every #'stringp args))
                  ;; Argument number should be even.
-                 (should (cl-evenp (length args)))
+                 (should (evenp (length args)))
                  (should
                   (cond
                    ((string= (car args) "find-internet-password")

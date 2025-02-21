@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2024 Free Software Foundation, Inc.
+/* Copyright (C) 2018-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -226,6 +226,8 @@ enum
    EMACS_RELOC_LENGTH_BITS = DUMP_OFF_WIDTH - EMACS_RELOC_TYPE_BITS
   };
 
+static_assert (RELOC_EMACS_EMACS_LV <= (1 << EMACS_RELOC_TYPE_BITS));
+
 struct emacs_reloc
 {
   ENUM_BF (emacs_reloc_type) type : EMACS_RELOC_TYPE_BITS;
@@ -444,7 +446,9 @@ enum cold_op
     COLD_OP_CHARSET,
     COLD_OP_BUFFER,
     COLD_OP_BIGNUM,
+#ifdef HAVE_NATIVE_COMP
     COLD_OP_NATIVE_SUBR,
+#endif
   };
 
 /* This structure controls what operations we perform inside
@@ -675,8 +679,8 @@ static Lisp_Object
 dump_ptr_referrer (const char *label, void const *address)
 {
   char buf[128];
-  buf[0] = '\0';
-  sprintf (buf, "%s @ %p", label, address);
+  if (sizeof buf <= snprintf (buf, sizeof buf, "%s @ %p", label, address))
+    strcpy (buf + sizeof buf - 4, "...");
   return build_string (buf);
 }
 
@@ -2465,7 +2469,7 @@ dump_symbol (struct dump_context *ctx,
              Lisp_Object object,
              dump_off offset)
 {
-#if CHECK_STRUCTS && !defined HASH_Lisp_Symbol_61B174C9F4
+#if CHECK_STRUCTS && !defined HASH_Lisp_Symbol_E0ADAF2F24
 # error "Lisp_Symbol changed. See CHECK_STRUCTS comment in config.h."
 #endif
 #if CHECK_STRUCTS && !defined (HASH_symbol_redirect_EA72E4BFF5)
@@ -2502,7 +2506,6 @@ dump_symbol (struct dump_context *ctx,
   DUMP_FIELD_COPY (&out, symbol, u.s.trapped_write);
   DUMP_FIELD_COPY (&out, symbol, u.s.interned);
   DUMP_FIELD_COPY (&out, symbol, u.s.declared_special);
-  DUMP_FIELD_COPY (&out, symbol, u.s.pinned);
   dump_field_lv (ctx, &out, symbol, &symbol->u.s.name, WEIGHT_STRONG);
   switch (symbol->u.s.redirect)
     {
@@ -2734,7 +2737,7 @@ dump_hash_table_contents (struct dump_context *ctx, struct Lisp_Hash_Table *h)
 static dump_off
 dump_hash_table (struct dump_context *ctx, Lisp_Object object)
 {
-#if CHECK_STRUCTS && !defined HASH_Lisp_Hash_Table_0360833954
+#if CHECK_STRUCTS && !defined HASH_Lisp_Hash_Table_2A3C3E2B62
 # error "Lisp_Hash_Table changed. See CHECK_STRUCTS comment in config.h."
 #endif
   const struct Lisp_Hash_Table *hash_in = XHASH_TABLE (object);
@@ -2748,7 +2751,6 @@ dump_hash_table (struct dump_context *ctx, Lisp_Object object)
   dump_pseudovector_lisp_fields (ctx, &out->header, &hash->header);
   DUMP_FIELD_COPY (out, hash, count);
   DUMP_FIELD_COPY (out, hash, weakness);
-  DUMP_FIELD_COPY (out, hash, purecopy);
   DUMP_FIELD_COPY (out, hash, mutable);
   DUMP_FIELD_COPY (out, hash, frozen_test);
   if (hash->key_and_value)
@@ -2966,7 +2968,7 @@ dump_bool_vector (struct dump_context *ctx, const struct Lisp_Vector *v)
 static dump_off
 dump_subr (struct dump_context *ctx, const struct Lisp_Subr *subr)
 {
-#if CHECK_STRUCTS && !defined (HASH_Lisp_Subr_20B7443AD7)
+#if CHECK_STRUCTS && !defined (HASH_Lisp_Subr_EE5F7351CC)
 # error "Lisp_Subr changed. See CHECK_STRUCTS comment in config.h."
 #endif
   struct Lisp_Subr out;
@@ -2974,15 +2976,14 @@ dump_subr (struct dump_context *ctx, const struct Lisp_Subr *subr)
   DUMP_FIELD_COPY (&out, subr, header.size);
 #ifdef HAVE_NATIVE_COMP
   bool non_primitive = !NILP (subr->native_comp_u);
-#else
-  bool non_primitive = false;
-#endif
   if (non_primitive)
     out.function.a0 = NULL;
   else
+#endif
     dump_field_emacs_ptr (ctx, &out, subr, &subr->function.a0);
   DUMP_FIELD_COPY (&out, subr, min_args);
   DUMP_FIELD_COPY (&out, subr, max_args);
+#ifdef HAVE_NATIVE_COMP
   if (non_primitive)
     {
       dump_field_fixup_later (ctx, &out, subr, &subr->symbol_name);
@@ -2993,6 +2994,7 @@ dump_subr (struct dump_context *ctx, const struct Lisp_Subr *subr)
       dump_field_lv (ctx, &out, subr, &subr->command_modes, WEIGHT_NORMAL);
     }
   else
+#endif
     {
       dump_field_emacs_ptr (ctx, &out, subr, &subr->symbol_name);
       dump_field_emacs_ptr (ctx, &out, subr, &subr->intspec.string);
@@ -3008,12 +3010,14 @@ dump_subr (struct dump_context *ctx, const struct Lisp_Subr *subr)
   dump_field_lv (ctx, &out, subr, &subr->type, WEIGHT_NORMAL);
 #endif
   dump_off subr_off = dump_object_finish (ctx, &out, sizeof (out));
+#ifdef HAVE_NATIVE_COMP
   if (non_primitive && ctx->flags.dump_object_contents)
     /* We'll do the final addr relocation during VERY_LATE_RELOCS time
        after the compilation units has been loaded. */
     dump_push (&ctx->dump_relocs[VERY_LATE_RELOCS],
 	       list2 (make_fixnum (RELOC_NATIVE_SUBR),
 		      dump_off_to_lisp (subr_off)));
+#endif
   return subr_off;
 }
 
@@ -3143,8 +3147,10 @@ dump_vectorlike (struct dump_context *ctx,
     case PVEC_TS_NODE:
       break;
     }
-  char msg[60];
-  snprintf (msg, sizeof msg, "pseudovector type %d", (int) ptype);
+  int iptype = ptype;
+  static char const fmt[] = "pseudovector type %d";
+  char msg[sizeof fmt - sizeof "%d" + INT_STRLEN_BOUND (iptype) + 1];
+  sprintf (msg, fmt, iptype);
   error_unsupported_dump_object (ctx, lv, msg);
 }
 
@@ -3238,7 +3244,8 @@ dump_object (struct dump_context *ctx, Lisp_Object object)
     case Lisp_Float:
       offset = dump_float (ctx, XFLOAT (object));
       break;
-    case_Lisp_Int:
+    case Lisp_Int0:
+    case Lisp_Int1:
       eassert ("should not be dumping int: is self-representing" && 0);
       abort ();
     default:
@@ -4143,12 +4150,6 @@ types.  */)
            "contributing a patch to Emacs.");
 #endif
 
-  if (will_dump_with_unexec_p ())
-    error ("This Emacs instance was started under the assumption "
-           "that it would be dumped with unexec, not the portable "
-           "dumper.  Dumping with the portable dumper may produce "
-           "unexpected results.");
-
   if (!main_thread_p (current_thread))
     error ("This function can be called only in the main thread");
 
@@ -4156,10 +4157,8 @@ types.  */)
     error ("No other Lisp threads can be running when this function is called");
 
 #ifdef HAVE_NATIVE_COMP
-  CALLN (Ffuncall, intern_c_string ("load--fixup-all-elns"));
+  calln (intern_c_string ("load--fixup-all-elns"));
 #endif
-
-  check_pure_size ();
 
   /* Clear out any detritus in memory.  */
   do
@@ -4244,8 +4243,24 @@ types.  */)
   ctx->old_process_environment = Vprocess_environment;
   Vprocess_environment = Qnil;
 
-  ctx->fd = emacs_open (SSDATA (filename),
-                        O_RDWR | O_TRUNC | O_CREAT, 0666);
+  {
+    USE_SAFE_ALLOCA;
+
+    char *filename_1;
+    SAFE_ALLOCA_STRING (filename_1, filename);
+#ifdef MSDOS
+    /* Rewrite references to .pdmp to refer to .dmp files on DOS.  */
+    size_t len = strlen (filename_1);
+    if (len >= 5
+	&& !strcmp (filename_1 + len - 5, ".pdmp"))
+      {
+	strcpy (filename_1 + len - 5, ".dmp");
+	filename = DECODE_FILE (build_unibyte_string (filename_1));
+      }
+#endif /* MSDOS */
+    ctx->fd = emacs_open (filename_1, O_RDWR | O_TRUNC | O_CREAT, 0666);
+    SAFE_FREE ();
+  }
   if (ctx->fd < 0)
     report_file_error ("Opening dump output", filename);
   static_assert (sizeof (ctx->header.magic) == sizeof (dump_magic));
@@ -5508,13 +5523,13 @@ dump_do_dump_relocation (const uintptr_t dump_base,
 	if (!NILP (lambda_data_idx))
 	  {
 	    /* This is an anonymous lambda.
-	       We must fixup d_reloc_imp so the lambda can be referenced
+	       We must fixup d_reloc so the lambda can be referenced
 	       by code.  */
 	    Lisp_Object tem;
 	    XSETSUBR (tem, subr);
 	    Lisp_Object *fixup =
-	      &(comp_u->data_imp_relocs[XFIXNUM (lambda_data_idx)]);
-	    eassert (EQ (*fixup, Qlambda_fixup));
+	      &(comp_u->data_relocs[XFIXNUM (lambda_data_idx)]);
+	    eassert (EQ (*fixup, Vcomp__hashdollar));
 	    *fixup = tem;
 	    Fputhash (tem, Qt, comp_u->lambda_gc_guard_h);
 	  }

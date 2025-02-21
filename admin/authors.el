@@ -1,6 +1,6 @@
 ;;; authors.el --- utility for maintaining Emacs's AUTHORS file  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Gerd Moellmann <gerd@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -97,6 +97,7 @@ files.")
     ("Earl Hyatt" "Earl" "ej32u@protonmail\\.com")
     ("Ed L. Cashin" "Ed L Cashin")
     ("Edward M. Reingold" "Ed\\(ward\\( M\\)?\\)? Reingold" "Reingold Edward M")
+    ("Elías Gabriel Pérez" "eg642616@gmail\\.com") ; bug#76319
     ("Emilio C. Lopes" "Emilio Lopes")
     ("Eric M. Ludlam" "Eric Ludlam")
     ("Eric S. Raymond" "Eric Raymond")
@@ -264,6 +265,7 @@ files.")
     ;; There are other Stefans.
 ;;;    ("Stefan Monnier" "Stefan")
     (nil "ssnnoo")
+    ("Stephane Marks" "shipmints@gmail\\.com")
     ("Steven L. Baur" "SL Baur" "Steven L Baur")
     ("Stewart M. Clamen" "Stewart Clamen")
     (nil "StrawberryTea" "look@strawberrytea\\.xyz")
@@ -278,7 +280,7 @@ files.")
     ("Thomas Dye" "Tom Dye")
     ("Thomas Horsley" "Tom Horsley")	; FIXME ?
     ("Thomas Wurgler" "Tom Wurgler")
-    (nil "thuna\\.cing@gmail\\.com")
+    ("Umut Tuna Akgül" "thuna\\.cing@gmail\\.com")
     ("Toby Cubitt" "Toby S\\. Cubitt")
     ("Tomohiko Morioka" "MORIOKA Tomohiko")
     ("Torbjörn Axelsson" "Torbjvrn Axelsson")
@@ -294,6 +296,7 @@ files.")
     (nil "vjoki@")
     (nil "whatacold@gmail\\.com")
     ("William M. Perry" "Bill Perry")
+    ("William O'Brien" "will\\.08rien@gmail.com")
     ("Włodzimierz Bzyl" "W.*dek Bzyl")
     (nil "xyblor")
     ("Yilkal Argaw" "yilkalargaw" "yilkalargawworkneh@gmail\\.com")
@@ -311,7 +314,7 @@ files.")
     ("Lin Zhou" "georgealbert@qq\\.com")
     (nil "yan@metatem\\.net")
     (nil "gnu_lists@halloleo\\.hailmail\\.net")
-    )
+    (nil "^Chu$" "maedaqu@gmail.com"))
   "Alist of author aliases.
 
 Each entry is of the form (REALNAME REGEXP...).
@@ -376,7 +379,6 @@ If REALNAME is nil, ignore that author.")
     "nnmaildir\\.el"
     "nnil\\.el"
     "b2m\\.c"
-    "unexhp9k800\\.c"
     "emacsclient\\.1"
     "check-doc-strings")
   "List of regexps matching files for which the FSF doesn't need papers.")
@@ -654,6 +656,7 @@ Changes to files matching one of the regexps in this list are not listed.")
     "if-11.cc"
     "if-11.res"
     "java/org/gnu/emacs/EmacsWindowAttachmentManager.java"
+    "lisp/gnus/gnus-nocem.el"
     "lisp/gnus/legacy-gnus-agent.el"
     "legacy-gnus-agent.el"
     "admin/coccinelle/xsave.cocci"
@@ -1151,7 +1154,7 @@ AUTHORS file.  There are also some more recent manual additions.")
     "admin/notes/tree-sitter/build-module/batch.sh"
     "doc/misc/gnus-coding.texi"
     "gnus-coding.texi"
-    )
+    "doc/misc/org.texi")
   "File names which are valid, but no longer exist (or cannot be found)
 in the repository.")
 
@@ -1711,7 +1714,8 @@ in the repository.")
     ("lisp/emacs-lisp/tcover-unsafep.el" . "test/lisp/emacs-lisp/unsafep-tests.el")
     ("lisp/vt100-led.el" . "lisp/obsolete/vt100-led.el")
     ("lisp/mail/metamail.el" . "lisp/obsolete/metamail.el")
-    ("lisp/sb-image.el" . "lisp/obsolete/sb-image.el"))
+    ("lisp/sb-image.el" . "lisp/obsolete/sb-image.el")
+    ("lisp/cedet/semantic/grammar-wy.el" . "lisp/cedet/semantic/grm-wy-boot.el"))
   "Alist of files which have been renamed during their lifetime.
 Elements are (OLDNAME . NEWNAME).")
 

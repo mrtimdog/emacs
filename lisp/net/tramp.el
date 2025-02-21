@@ -1,6 +1,6 @@
 ;;; tramp.el --- Transparent Remote Access, Multiple Protocol  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1998-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: Kai Großjohann <kai.grossjohann@gmx.net>
 ;;         Michael Albinus <michael.albinus@gmx.de>
@@ -1826,14 +1826,9 @@ default values are used."
 		  user (tramp-find-user method user host)
 		  host (tramp-find-host method user host))
 	    (when hop
-	      ;; Replace placeholders.  The hop could contain "%"
-	      ;; which is not intended as format character, for
-	      ;; example in USER%DOMAIN or POD%NAMESPACE.
-	      (setq hop
-		    (replace-regexp-in-string
-		     (rx "%" (group (= 2 alnum))) "%%\\1" hop)
-		    hop
-		    (format-spec hop (format-spec-make ?h host ?u user))))))
+	      ;; Replace placeholders.
+	      (setq
+	       hop (tramp-format-spec hop (format-spec-make ?h host ?u user))))))
 
 	;; Return result.
 	(prog1
@@ -1893,7 +1888,13 @@ See `tramp-dissect-file-name' for details."
 ;;;###tramp-autoload
 (defsubst tramp-string-empty-or-nil-p (string)
   "Check whether STRING is empty or nil."
+  ;; (declare (tramp-suppress-trace t))
   (or (null string) (string= string "")))
+
+;; We cannot use the `declare' form for `tramp-suppress-trace' in
+;; autoloaded functions, because the tramp-loaddefs.el generation
+;; would fail.
+(function-put #'tramp-string-empty-or-nil-p 'tramp-suppress-trace t)
 
 (defun tramp-buffer-name (vec)
   "A name for the connection buffer VEC."
@@ -2001,10 +2002,11 @@ Unless DONT-CREATE, the buffer is created when it doesn't exist yet."
   (or (get-buffer (tramp-buffer-name vec))
       (unless dont-create
 	(with-current-buffer (get-buffer-create (tramp-buffer-name vec))
-	  ;; We use the existence of connection property " process-buffer"
-	  ;; as indication, whether a connection is active.
+	  ;; We use the existence of connection property " connected"
+	  ;; as indication, whether a connection is active.  It keeps
+	  ;; the connection buffer, for cleanup.
 	  (tramp-set-connection-property
-	   vec " process-buffer"
+	   vec " connected"
 	   (tramp-get-connection-property vec " process-buffer"))
 	  (setq buffer-undo-list t
 		default-directory
@@ -2232,6 +2234,14 @@ letter into the file name.  This function removes it."
 	    (replace-regexp-in-string
 	     (rx (regexp tramp-volume-letter-regexp) "/") "/" result))
       (if quoted (file-name-quote result 'top) result))))
+
+(defun tramp-format-spec (format specification)
+  "Implement `format-spec' in Tramp.
+FORMAT could contain \"%\" which is not intended as format character,
+for example in USER%DOMAIN or POD%NAMESPACE."
+  (format-spec
+   (replace-regexp-in-string (rx "%" (group (= 2 alnum))) "%%\\1" format)
+   specification))
 
 ;;; Config Manipulation Functions:
 
@@ -2524,10 +2534,7 @@ Fall back to normal file name handler if no Tramp file name handler exists."
 			  ;; We flush connection properties
 			  ;; " process-name" and " process-buffer",
 			  ;; because the operations shall be applied
-			  ;; in the main connection process.  In order
-			  ;; to avoid superfluous debug buffers during
-			  ;; host name completion, we adapt
-			  ;; `tramp-verbose'.
+			  ;; in the main connection process.
 			  ;; If `non-essential' is non-nil, Tramp shall
 		          ;; not open a new connection.
 		          ;; If Tramp detects that it shouldn't continue
@@ -2538,11 +2545,8 @@ Fall back to normal file name handler if no Tramp file name handler exists."
 		          ;; In both cases, we try the default handler then.
 			  (with-tramp-saved-connection-properties
 			      v '(" process-name" " process-buffer")
-			    (let ((tramp-verbose
-				   (if minibuffer-completing-file-name
-				       0 tramp-verbose)))
-			      (tramp-flush-connection-property v " process-name")
-			      (tramp-flush-connection-property v " process-buffer"))
+			    (tramp-flush-connection-property v " process-name")
+			    (tramp-flush-connection-property v " process-buffer")
 		            (setq result
 				  (catch 'non-essential
 			            (catch 'suppress
@@ -3714,7 +3718,9 @@ on the same host.  Otherwise, TARGET is quoted."
 	 (setf ,target (tramp-file-local-name (expand-file-name ,target))))
        ;; There could be a cyclic link.
        (tramp-flush-file-properties
-	v (expand-file-name ,target (tramp-file-local-name default-directory))))
+	v (tramp-drop-volume-letter
+	   (expand-file-name
+	    ,target (tramp-file-local-name default-directory)))))
 
      ;; If TARGET is still remote, quote it.
      (if (tramp-tramp-file-p ,target)
@@ -5033,7 +5039,7 @@ Do not set it manually, it is used buffer-local in `tramp-get-lock-pid'.")
 	      (setq choices nil)
 	    ;; Replace placeholders.
 	    (setq proxy
-		  (format-spec
+		  (tramp-format-spec
 		   proxy
 		   (format-spec-make
 		    ?u (or (tramp-file-name-user (car target-alist)) "")
@@ -5108,7 +5114,7 @@ a connection-local variable."
     (flatten-tree
      (mapcar
       (lambda (x)
-	(setq x (mapcar (lambda (y) (format-spec y spec)) x))
+	(setq x (mapcar (lambda (y) (tramp-format-spec y spec)) x))
 	(unless (member "" x) x))
       args))))
 
@@ -5283,7 +5289,6 @@ should be set connection-local.")
       ;; so we reset it.
       (set-process-query-on-exit-flag p (null noquery))
       (process-put p 'remote-command orig-command)
-      (tramp-set-connection-property p "remote-command" orig-command)
       (when (bufferp stderr)
 	(tramp-taint-remote-process-buffer stderr))
 
@@ -7197,5 +7202,11 @@ If VEC is `tramp-null-hop', return local null device."
 ;;
 ;; * Implement user and host name completion for multi-hops.  Some
 ;;   methods in tramp-container.el have it already.
+;;
+;; * Make it configurable, which environment variables are set in
+;;   direct async processes.
+;;
+;; * Pass working dir for direct async processes, for example for
+;;   container methods.
 
 ;;; tramp.el ends here

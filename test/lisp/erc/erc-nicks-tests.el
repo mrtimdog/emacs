@@ -1,6 +1,6 @@
 ;;; erc-nicks-tests.el --- Tests for erc-nicks  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -579,6 +579,7 @@
   (defvar erc-track--normal-faces)
 
   (erc-tests-common-make-server-buf)
+  (erc-track-mode +1)
   (erc-nicks-mode +1)
 
   (let ((erc-modules (cons 'nicks erc-modules))
@@ -614,6 +615,8 @@
   (erc-tests-common-kill-buffers))
 
 (ert-deftest erc-nicks-track-faces/prioritize ()
+  :tags (and (null (getenv "CI")) '(:unstable))
+
   (should (eq erc-nicks-track-faces 'prioritize))
   (erc-nicks-tests--track-faces
    (lambda (set-faces assert-result add-face bob-face alice-face)
@@ -680,6 +683,9 @@
      (funcall assert-result '(7 . erc-notice-face)))))
 
 (ert-deftest erc-nicks-track-faces/defer ()
+  (when (< emacs-major-version 28)
+    (ert-skip "Possible intermittent failures on 27"))
+
   (should (eq erc-nicks-track-faces 'prioritize))
   (let ((erc-nicks-track-faces 'defer))
     (erc-nicks-tests--track-faces

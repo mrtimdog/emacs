@@ -1,6 +1,6 @@
 ;;; elec-pair.el --- Automatic parenthesis pairing  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; Author: João Távora <joaotavora@gmail.com>
 
@@ -558,7 +558,7 @@ The decision is taken by order of preference:
         ;; Backslash-escaped: no pairing, no skipping.
         ((save-excursion
            (goto-char beg)
-           (not (zerop (% (skip-syntax-backward "\\") 2))))
+           (not (evenp (skip-syntax-backward "\\"))))
          (let ((current-prefix-arg (1- num)))
            (electric-pair-post-self-insert-function)))
         ;; Skip self.

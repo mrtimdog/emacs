@@ -1,6 +1,6 @@
 ;;; shr.el --- Simple HTML Renderer -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: html
@@ -1052,15 +1052,15 @@ When `shr-fill-text' is nil, only indent."
           (insert-char ?\s shr-indentation)
         (insert ?\s)
         ;; Set the specified space width in units of the average-width
-        ;; of the current font, like (N . width).  That way, the
+        ;; of the current face, like (N . width).  That way, the
         ;; indentation is calculated correctly when using
         ;; `text-scale-adjust'.
         (let ((avg-space (propertize (buffer-substring (1- (point)) (point))
-                                     'display '(space :width 1))))
+                                     'display '(space :width (1 . width)))))
           (put-text-property
            (1- (point)) (point) 'display
            `(space :width (,(/ (float shr-indentation)
-                               (string-pixel-width avg-space (current-buffer)))
+                               (string-pixel-width avg-space))
                            . width)))))
       (put-text-property start (+ (point) prefix)
                          'shr-prefix-length (+ prefix (- (point) start))))))
@@ -1276,6 +1276,7 @@ not, `imagemagick' is preferred if it's present."
       nil
     'imagemagick))
 
+(defvar image-scaling-factor)
 (defun shr-rescale-image (data content-type width height
                                &optional max-width max-height)
   "Rescale DATA, if too big, to fit the current buffer.

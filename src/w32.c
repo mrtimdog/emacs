@@ -1,6 +1,6 @@
 /* Utility and Unix shadow routines for GNU Emacs on the Microsoft Windows API.
 
-Copyright (C) 1994-1995, 2000-2024 Free Software Foundation, Inc.
+Copyright (C) 1994-1995, 2000-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1685,6 +1685,19 @@ w32_init_file_name_codepage (void)
 {
   file_name_codepage = CP_ACP;
   w32_ansi_code_page = CP_ACP;
+#ifdef HAVE_PDUMPER
+  /* If we were dumped with pdumper, this function will be called after
+     loading the pdumper file, and needs to reset the following
+     variables that come from the dump stage, which could be on a
+     different system with different default codepages.  Then, the
+     correct value of w32-ansi-code-page will be assigned by
+     globals_of_w32fns, which is called from 'main'.  Until that call
+     happens, w32-ansi-code-page will have the value of CP_ACP, which
+     stands for the default ANSI codepage.  The other variables will be
+     computed by codepage_for_filenames below.  */
+  Vdefault_file_name_coding_system = Qnil;
+  Vfile_name_coding_system = Qnil;
+#endif
 }
 
 /* Produce a Windows ANSI codepage suitable for encoding file names.
@@ -7668,7 +7681,7 @@ w32_memory_info (unsigned long long *totalram, unsigned long long *freeram,
 {
   MEMORYSTATUS memst;
   MEMORY_STATUS_EX memstex;
-
+  memstex.dwLength = sizeof (memstex);
   /* Use GlobalMemoryStatusEx if available, as it can report more than
      2GB of memory.  */
   if (global_memory_status_ex (&memstex))
@@ -7679,7 +7692,9 @@ w32_memory_info (unsigned long long *totalram, unsigned long long *freeram,
       *freeswap  = memstex.ullAvailPageFile;
       return 0;
     }
-  else if (global_memory_status (&memst))
+
+  memst.dwLength = sizeof (memst);
+  if (global_memory_status (&memst))
     {
       *totalram = memst.dwTotalPhys;
       *freeram   = memst.dwAvailPhys;

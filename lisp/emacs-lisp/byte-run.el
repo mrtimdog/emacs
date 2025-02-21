@@ -1,6 +1,6 @@
 ;;; byte-run.el --- byte-compiler support for inlining  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Jamie Zawinski <jwz@lucid.com>
 ;;	Hallvard Furuseth <hbf@ulrik.uio.no>
@@ -543,7 +543,7 @@ was first made obsolete, for example a date or a release number."
   (put obsolete-name 'byte-obsolete-info
        ;; The second entry used to hold the `byte-compile' handler, but
        ;; is not used any more nowadays.
-       (purecopy (list current-name nil when)))
+       (list current-name nil when))
   obsolete-name)
 
 (defmacro define-obsolete-function-alias ( obsolete-name current-name when
@@ -571,14 +571,15 @@ See the docstrings of `defalias' and `make-obsolete' for more details."
                                 &optional access-type)
   "Make the byte-compiler warn that OBSOLETE-NAME is obsolete.
 The warning will say that CURRENT-NAME should be used instead.
-If CURRENT-NAME is a string, that is the `use instead' message.
+If CURRENT-NAME is a string, that is the `use instead' message.  If it
+is a string, it is passed through `substitute-command-keys'.
 WHEN should be a string indicating when the variable
 was first made obsolete, for example a date or a release number.
 ACCESS-TYPE if non-nil should specify the kind of access that will trigger
   obsolescence warnings; it can be either `get' or `set'."
   (byte-run--constant-obsolete-warning obsolete-name)
   (put obsolete-name 'byte-obsolete-variable
-       (purecopy (list current-name access-type when)))
+       (list current-name access-type when))
   obsolete-name)
 
 (defmacro define-obsolete-variable-alias ( obsolete-name current-name when
@@ -633,7 +634,7 @@ obsolete, for example a date or a release number."
   `(progn
      (put ,obsolete-face 'face-alias ,current-face)
      ;; Used by M-x describe-face.
-     (put ,obsolete-face 'obsolete-face (or (purecopy ,when) t))))
+     (put ,obsolete-face 'obsolete-face (or ,when t))))
 
 (defmacro dont-compile (&rest body)
   "Like `progn', but the body always runs interpreted (not compiled).

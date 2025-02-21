@@ -1,6 +1,6 @@
 ;;; easy-mmode.el --- easy definition for major and minor modes  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997, 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Georges Brun-Cottan <Georges.Brun-Cottan@inria.fr>
 ;; Maintainer: Stefan Monnier <monnier@gnu.org>
@@ -269,7 +269,7 @@ INIT-VALUE LIGHTER KEYMAP.
       (setq body (cdr body))
       (pcase keyw
 	(:init-value (setq init-value (pop body)))
-	(:lighter (setq lighter (purecopy (pop body))))
+        (:lighter (setq lighter (pop body)))
 	(:global (setq globalp (pop body))
                  (when (and globalp (symbolp mode))
                    (setq setter `(setq-default ,mode))

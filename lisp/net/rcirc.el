@@ -1,6 +1,6 @@
 ;;; rcirc.el --- default, simple IRC client          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2005-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
 ;; Author: Ryan Yeske <rcyeske@gmail.com>
 ;; Maintainers: Ryan Yeske <rcyeske@gmail.com>,
@@ -1187,11 +1187,11 @@ element in PARTS is a list, append it to PARTS."
 (defun rcirc-buffer-process (&optional buffer)
   "Return the process associated with channel BUFFER.
 With no argument or nil as argument, use the current buffer."
-  (let ((buffer (or buffer (and (buffer-live-p rcirc-server-buffer)
-                                rcirc-server-buffer))))
-    (if buffer
-        (buffer-local-value 'rcirc-process buffer)
-      rcirc-process)))
+  (let ((buffer (or buffer (current-buffer))))
+    (buffer-local-value
+     'rcirc-process
+     (or (buffer-local-value 'rcirc-server-buffer buffer)
+         (error "Not an rcirc buffer: %S" buffer)))))
 
 (defun rcirc-server-name (process)
   "Return PROCESS server name, given by the 001 response."
@@ -1323,10 +1323,8 @@ The list is updated automatically by `defun-rcirc-command'.")
                         (rcirc-channel-nicks (rcirc-buffer-process)
                                              rcirc-target))))))
          (list beg (point)
-               (lambda (str pred action)
-                 (if (eq action 'metadata)
-                     '(metadata (cycle-sort-function . identity))
-                   (complete-with-action action table str pred)))))))
+               (completion-table-with-metadata
+                table '((cycle-sort-function . identity)))))))
 
 (defun rcirc-set-decode-coding-system (coding-system)
   "Set the decode CODING-SYSTEM used in this channel."
@@ -2274,8 +2272,7 @@ PROCESS is the process object for the current connection."
   "Return list of channels for NICK.
 PROCESS is the process object for the current connection."
   (with-rcirc-process-buffer process
-    (mapcar (lambda (x) (car x))
-            (gethash nick rcirc-nick-table))))
+    (mapcar #'car (gethash nick rcirc-nick-table))))
 
 (defun rcirc-put-nick-channel (process nick channel &optional line)
   "Add CHANNEL to list associated with NICK.
@@ -2329,7 +2326,7 @@ PROCESS is the process object for the current connection."
                    (if record
                        (setq nicks (cons (cons k (cdr record)) nicks)))))
                rcirc-nick-table)
-              (mapcar (lambda (x) (car x))
+              (mapcar #'car
                       (sort (nconc pseudo-nicks nicks)
                             (lambda (x y)
                               (let ((lx (or (cdr x) 0))
@@ -2448,7 +2445,8 @@ This function does not alter the INPUT string."
 
 (defun rcirc-next-active-buffer (arg)
   "Switch to the next rcirc buffer with activity.
-With prefix ARG, go to the next low priority buffer with activity."
+With prefix ARG, go to the next low priority buffer with activity.
+When there are no buffers with activity, bury all rcirc buffers."
   (interactive "P")
   (let* ((pair (rcirc-split-activity rcirc-activity))
          (lopri (car pair))
@@ -3005,8 +3003,8 @@ If ARG is given, opens the URL in a new browser window."
          (filtered (seq-filter
                     (lambda (x) (>= point (cdr x)))
                     rcirc-urls))
-         (completions (mapcar (lambda (x) (car x)) filtered))
-         (defaults (mapcar (lambda (x) (car x)) filtered)))
+         (completions (mapcar #'car filtered))
+         (defaults (mapcar #'car filtered)))
     (browse-url (completing-read "Rcirc browse-url: "
                                  completions nil nil (car defaults) nil defaults)
                 arg)))

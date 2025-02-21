@@ -1,6 +1,6 @@
 ;;; shell.el --- specialized comint.el for running the shell -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1993-1997, 2000-2024 Free Software Foundation,
+;; Copyright (C) 1988, 1993-1997, 2000-2025 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Olin Shivers <shivers@cs.cmu.edu>
@@ -113,7 +113,7 @@
   :group 'shell)
 
 ;;;###autoload
-(defcustom shell-dumb-shell-regexp (purecopy "cmd\\(proxy\\)?\\.exe")
+(defcustom shell-dumb-shell-regexp "cmd\\(proxy\\)?\\.exe"
   "Regexp to match shells that don't save their command history, and
 don't handle the backslash as a quote character.  For shells that
 match this regexp, Emacs will write out the command history when the
@@ -953,8 +953,8 @@ Make the shell buffer the current buffer, and return it.
                  (current-buffer)))
   ;; The buffer's window must be correctly set when we call comint
   ;; (so that comint sets the COLUMNS env var properly).
-  (with-suppressed-warnings ((obsolete display-comint-buffer-action))
-    (pop-to-buffer buffer display-comint-buffer-action))
+  (pop-to-buffer buffer (append display-buffer--same-window-action
+                                '((category . comint))))
 
   (with-connection-local-variables
    (when file-name

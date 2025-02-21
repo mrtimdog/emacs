@@ -1,6 +1,6 @@
 ;;; org-macro.el --- Macro Replacement Code for Org  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, text
@@ -329,7 +329,7 @@ Return a list of arguments, as strings.  This is the opposite of
     (lambda (str)
       (let ((len (length (match-string 1 str))))
 	(concat (make-string (/ len 2) ?\\)
-		(if (zerop (mod len 2)) "\000" ","))))
+		(if (cl-evenp len) "\000" ","))))
     s nil t)
    "\000"))
 

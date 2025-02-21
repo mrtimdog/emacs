@@ -1,6 +1,6 @@
 ;;; ielm.el --- interaction mode for Emacs Lisp  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1994, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: David Smith <maa036@lancaster.ac.uk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -683,7 +683,8 @@ See `inferior-emacs-lisp-mode' for details."
     (unless (comint-check-proc buf-name)
       (with-current-buffer (get-buffer-create buf-name)
         (unless (zerop (buffer-size)) (setq old-point (point)))
-        (inferior-emacs-lisp-mode)))
+        (inferior-emacs-lisp-mode)
+        (setq-local trusted-content :all)))
     (pop-to-buffer-same-window buf-name)
     (when old-point (push-mark old-point))))
 

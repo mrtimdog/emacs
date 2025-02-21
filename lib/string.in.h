@@ -1,6 +1,6 @@
 /* A GNU-like <string.h>.
 
-   Copyright (C) 1995-1996, 2001-2024 Free Software Foundation, Inc.
+   Copyright (C) 1995-1996, 2001-2025 Free Software Foundation, Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -20,7 +20,7 @@
 #endif
 @PRAGMA_COLUMNS@
 
-#if defined _GL_ALREADY_INCLUDING_STRING_H
+#if defined _@GUARD_PREFIX@_ALREADY_INCLUDING_STRING_H
 /* Special invocation convention:
    - On OS X/NetBSD we have a sequence of nested includes
        <string.h> -> <strings.h> -> "string.h"
@@ -34,12 +34,12 @@
 
 #ifndef _@GUARD_PREFIX@_STRING_H
 
-#define _GL_ALREADY_INCLUDING_STRING_H
+#define _@GUARD_PREFIX@_ALREADY_INCLUDING_STRING_H
 
 /* The include_next requires a split double-inclusion guard.  */
 #@INCLUDE_NEXT@ @NEXT_STRING_H@
 
-#undef _GL_ALREADY_INCLUDING_STRING_H
+#undef _@GUARD_PREFIX@_ALREADY_INCLUDING_STRING_H
 
 #ifndef _@GUARD_PREFIX@_STRING_H
 #define _@GUARD_PREFIX@_STRING_H
@@ -1077,6 +1077,22 @@ _GL_WARN_ON_USE (strtok_r, "strtok_r is unportable - "
 /* The following functions are not specified by POSIX.  They are gnulib
    extensions.  */
 
+#if @GNULIB_STR_STARTSWITH@
+/* Returns true if STRING starts with PREFIX.
+   Returns false otherwise.  */
+_GL_EXTERN_C bool str_startswith (const char *string, const char *prefix)
+     _GL_ATTRIBUTE_PURE
+     _GL_ARG_NONNULL ((1, 2));
+#endif
+
+#if @GNULIB_STR_ENDSWITH@
+/* Returns true if STRING ends with SUFFIX.
+   Returns false otherwise.  */
+_GL_EXTERN_C bool str_endswith (const char *string, const char *prefix)
+     _GL_ATTRIBUTE_PURE
+     _GL_ARG_NONNULL ((1, 2));
+#endif
+
 #if @GNULIB_MBSLEN@
 /* Return the number of multibyte characters in the character string STRING.
    This considers multibyte characters, unlike strlen, which counts bytes.  */
@@ -1299,6 +1315,26 @@ _GL_EXTERN_C char * mbssep (char **stringp, const char *delim)
 _GL_EXTERN_C char * mbstok_r (char *restrict string, const char *delim,
                               char **save_ptr)
      _GL_ARG_NONNULL ((2, 3));
+#endif
+
+#if @GNULIB_MBS_STARTSWITH@
+/* Returns true if STRING starts with PREFIX.
+   Returns false otherwise.  */
+_GL_EXTERN_C bool mbs_startswith (const char *string, const char *prefix)
+     _GL_ATTRIBUTE_PURE
+     _GL_ARG_NONNULL ((1, 2));
+/* No extra code is needed for multibyte locales for this function.  */
+# define mbs_startswith str_startswith
+#endif
+
+#if @GNULIB_MBS_ENDSWITH@
+/* Returns true if STRING ends with SUFFIX.
+   Returns false otherwise.
+   Unlike str_endswith(), this function works correctly in multibyte locales.
+ */
+_GL_EXTERN_C bool mbs_endswith (const char *string, const char *suffix)
+     _GL_ATTRIBUTE_PURE
+     _GL_ARG_NONNULL ((1, 2));
 #endif
 
 /* Map any int, typically from errno, into an error message.  */

@@ -1,6 +1,6 @@
 @c -*- mode: texinfo; coding: utf-8 -*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1995, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Strings and Characters
@@ -478,8 +478,9 @@ a raw byte.
 @code{clear-string}:
 
 @defun clear-string string
-This makes @var{string} a unibyte string and clears its contents to
-null characters.  It may also change @var{string}'s length.
+This makes @var{string} a unibyte string, clears its contents to null
+characters, and removes all text properties.  It may also change
+@var{string}'s length.
 @end defun
 
 @need 2000

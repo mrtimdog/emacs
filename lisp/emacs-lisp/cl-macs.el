@@ -1,6 +1,6 @@
 ;;; cl-macs.el --- Common Lisp macros  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Old-Version: 2.02
@@ -70,9 +70,6 @@
       (setq form `(cons ,(car args) ,form)))
     form))
 
-;; Note: `cl--compiler-macro-cXXr' has been copied to
-;; `internal--compiler-macro-cXXr' in subr.el.  If you amend either
-;; one, you may want to amend the other, too.
 ;;;###autoload
 (define-obsolete-function-alias 'cl--compiler-macro-cXXr
   #'internal--compiler-macro-cXXr "25.1")
@@ -901,9 +898,13 @@ references may appear inside macro expansions, but not inside functions
 called from BODY."
   (declare (indent 1) (debug (symbolp body)))
   (if (cl--safe-expr-p `(progn ,@body)) `(progn ,@body)
-    `(cl--block-wrapper
-      (catch ',(intern (format "--cl-block-%s--" name))
-        ,@body))))
+    (let ((var (intern (format "--cl-block-%s--" name))))
+      `(cl--block-wrapper
+        ;; Build a unique "tag" in the form of a fresh cons.
+        ;; We include `var' in the cons, just in case it help debugging.
+        (let ((,var (cons ',var nil)))
+         (catch ,var
+           ,@body))))))
 
 ;;;###autoload
 (defmacro cl-return (&optional result)
@@ -921,7 +922,7 @@ This is compatible with Common Lisp, but note that `defun' and
 `defmacro' do not create implicit blocks as they do in Common Lisp."
   (declare (indent 1) (debug (symbolp &optional form)))
   (let ((name2 (intern (format "--cl-block-%s--" name))))
-    `(cl--block-throw ',name2 ,result)))
+    `(cl--block-throw ,name2 ,result)))
 
 
 ;;; The "cl-loop" macro.
@@ -2071,7 +2072,8 @@ Each definition can take the form (FUNC EXP) where
 FUNC is the function name, and EXP is an expression that returns the
 function value to which it should be bound, or it can take the more common
 form (FUNC ARGLIST BODY...) which is a shorthand
-for (FUNC (lambda ARGLIST BODY)).
+for (FUNC (lambda ARGLIST BODY)) where BODY is wrapped in
+a `cl-block' named FUNC.
 
 FUNC is defined only within FORM, not BODY, so you can't write
 recursive function definitions.  Use `cl-labels' for that.  See
@@ -2096,15 +2098,22 @@ info node `(cl) Function Bindings' for details.
                    cl-declarations body)))
   (let ((binds ()) (newenv macroexpand-all-environment))
     (dolist (binding bindings)
-      (let ((var (make-symbol (format "--cl-%s--" (car binding))))
-            (args-and-body (cdr binding)))
-        (if (and (= (length args-and-body) 1)
-                 (macroexp-copyable-p (car args-and-body)))
+      (let* ((var (make-symbol (format "--cl-%s--" (car binding))))
+             (args-and-body (cdr binding))
+             (args (car args-and-body))
+             (body (cdr args-and-body)))
+        (if (and (null body)
+                 (macroexp-copyable-p args))
             ;; Optimize (cl-flet ((fun var)) body).
-            (setq var (car args-and-body))
-          (push (list var (if (= (length args-and-body) 1)
-                              (car args-and-body)
-                            `(cl-function (lambda . ,args-and-body))))
+            (setq var args)
+          (push (list var (if (null body)
+                              args
+                            (let ((parsed-body (macroexp-parse-body body)))
+                              `(cl-function
+                                (lambda ,args
+                                  ,@(car parsed-body)
+                                  (cl-block ,(car binding)
+                                    ,@(cdr parsed-body)))))))
                 binds))
 	(push (cons (car binding)
                     (lambda (&rest args)
@@ -2271,10 +2280,11 @@ BINDINGS is a list of definitions of the form either (FUNC EXP)
 where EXP is a form that should return the function to bind to the
 function name FUNC, or (FUNC ARGLIST BODY...) where
 FUNC is the function name, ARGLIST its arguments, and BODY the
-forms of the function body.  FUNC is in scope in any BODY or EXP, as well
-as FORM, so you can write recursive and mutually recursive
-function definitions, with the caveat that EXPs are evaluated in sequence
-and you cannot call a FUNC before its EXP has been evaluated.
+forms of the function body.  BODY is wrapped in a `cl-block' named FUNC.
+FUNC is in scope in any BODY or EXP, as well as in FORM, so you can write
+recursive and mutually recursive function definitions, with the caveat
+that EXPs are evaluated in sequence and you cannot call a FUNC before its
+EXP has been evaluated.
 See info node `(cl) Function Bindings' for details.
 
 \(fn ((FUNC ARGLIST BODY...) ...) FORM...)"
@@ -2282,7 +2292,7 @@ See info node `(cl) Function Bindings' for details.
   (let ((binds ()) (newenv macroexpand-all-environment))
     (dolist (binding bindings)
       (let ((var (make-symbol (format "--cl-%s--" (car binding)))))
-	(push (cons var (cdr binding)) binds)
+	(push (cons var binding) binds)
 	(push (cons (car binding)
                     (lambda (&rest args)
                       (if (eq (car args) cl--labels-magic)
@@ -2295,12 +2305,18 @@ See info node `(cl) Function Bindings' for details.
     ;; Perform self-tail call elimination.
     `(letrec ,(mapcar
                (lambda (bind)
-                 (pcase-let* ((`(,var ,sargs . ,sbody) bind))
+                 (pcase-let* ((`(,var ,fun ,sargs . ,sbody) bind))
                    `(,var ,(cl--self-tco-on-form
                             var (macroexpand-all
                                  (if (null sbody)
                                      sargs ;A (FUNC EXP) definition.
-                                   `(cl-function (lambda ,sargs . ,sbody)))
+                                   (let ((parsed-body
+                                          (macroexp-parse-body sbody)))
+                                     `(cl-function
+                                       (lambda ,sargs
+                                         ,@(car parsed-body)
+                                         (cl-block ,fun
+                                           ,@(cdr parsed-body))))))
                                  newenv)))))
                (nreverse binds))
        . ,(macroexp-unprogn
@@ -2608,10 +2624,8 @@ values.  For compatibility, (cl-values A B C) is a synonym for (list A B C).
 ;;; Declarations.
 
 ;;;###autoload
-(defmacro cl-locally (&rest body)
-  "Equivalent to `progn'."
-  (declare (debug t))
-  (cons 'progn body))
+(define-obsolete-function-alias 'cl-locally #'progn "31.1")
+
 ;;;###autoload
 (defmacro cl-the (type form)
   "Return FORM.  If type-checking is enabled, assert that it is of TYPE."
@@ -2685,7 +2699,7 @@ Example:
 	 (let ((speed (assq (nth 1 (assq 'speed (cdr spec)))
 			    '((0 nil) (1 t) (2 t) (3 t))))
 	       (safety (assq (nth 1 (assq 'safety (cdr spec)))
-			     '((0 t) (1 t) (2 t) (3 nil)))))
+			     '((0 t) (1 nil) (2 nil) (3 nil)))))
 	   (if speed (setq cl--optimize-speed (car speed)
 			   byte-optimize (nth 1 speed)))
 	   (if safety (setq cl--optimize-safety (car safety)
@@ -3243,7 +3257,7 @@ To see the documentation for a defined struct type, use
                        (declare (side-effect-free t))
                        ,access-body)
                     forms)
-              (when (cl-oddp (length desc))
+              (when (oddp (length desc))
                 (push
                  (macroexp-warn-and-return
                   (format-message
@@ -3657,20 +3671,24 @@ macro that returns its `&whole' argument."
 
 (defvar cl--active-block-names nil)
 
-(cl-define-compiler-macro cl--block-wrapper (cl-form)
-  (let* ((cl-entry (cons (nth 1 (nth 1 cl-form)) nil))
-         (cl--active-block-names (cons cl-entry cl--active-block-names))
-         (cl-body (macroexpand-all      ;Performs compiler-macro expansions.
-                   (macroexp-progn (cddr cl-form))
-                   macroexpand-all-environment)))
-    ;; FIXME: To avoid re-applying macroexpand-all, we'd like to be able
-    ;; to indicate that this return value is already fully expanded.
-    (if (cdr cl-entry)
-        `(catch ,(nth 1 cl-form) ,@(macroexp-unprogn cl-body))
-      cl-body)))
+(cl-define-compiler-macro cl--block-wrapper (form)
+  (pcase form
+    (`(let ((,var . ,val)) (catch ,var . ,body))
+     (let* ((cl-entry (cons var nil))
+            (cl--active-block-names (cons cl-entry cl--active-block-names))
+            (cl-body (macroexpand-all      ;Performs compiler-macro expansions.
+                      (macroexp-progn body)
+                      macroexpand-all-environment)))
+       ;; FIXME: To avoid re-applying macroexpand-all, we'd like to be able
+       ;; to indicate that this return value is already fully expanded.
+       (if (cdr cl-entry)
+           `(let ((,var . ,val)) (catch ,var ,@(macroexp-unprogn cl-body)))
+           cl-body)))
+    ;; `form' was somehow mangled, god knows what happened, let's not touch it.
+    (_ form)))
 
 (cl-define-compiler-macro cl--block-throw (cl-tag cl-value)
-  (let ((cl-found (assq (nth 1 cl-tag) cl--active-block-names)))
+  (let ((cl-found (and (symbolp cl-tag) (assq cl-tag cl--active-block-names))))
     (if cl-found (setcdr cl-found t)))
   `(throw ,cl-tag ,cl-value))
 
@@ -3704,74 +3722,6 @@ macro that returns its `&whole' argument."
   (if def
       `(cl-getf (symbol-plist ,sym) ,prop ,def)
     `(get ,sym ,prop)))
-
-(dolist (y '(cl-first cl-second cl-third cl-fourth
-             cl-fifth cl-sixth cl-seventh
-             cl-eighth cl-ninth cl-tenth
-             cl-rest cl-endp cl-plusp cl-minusp
-             cl-caaar cl-caadr cl-cadar
-             cl-caddr cl-cdaar cl-cdadr
-             cl-cddar cl-cdddr cl-caaaar
-             cl-caaadr cl-caadar cl-caaddr
-             cl-cadaar cl-cadadr cl-caddar
-             cl-cadddr cl-cdaaar cl-cdaadr
-             cl-cdadar cl-cdaddr cl-cddaar
-             cl-cddadr cl-cdddar cl-cddddr))
-  (put y 'side-effect-free t))
-
-;;; Things that are inline.
-(cl-proclaim '(inline cl-acons cl-map cl-notany cl-notevery cl-revappend
-               cl-nreconc))
-
-;;; Things that are side-effect-free.
-(mapc (lambda (x) (function-put x 'side-effect-free t))
-      '(cl-oddp cl-evenp cl-signum cl-ldiff cl-pairlis cl-gcd
-        cl-lcm cl-isqrt cl-floor cl-ceiling cl-truncate cl-round cl-mod cl-rem
-        cl-subseq cl-list-length cl-get cl-getf))
-
-;;; Things that are side-effect-and-error-free.
-(mapc (lambda (x) (function-put x 'side-effect-free 'error-free))
-      '(cl-list* cl-acons cl-equalp
-        cl-random-state-p copy-tree))
-
-;;; Things whose return value should probably be used.
-(mapc (lambda (x) (function-put x 'important-return-value t))
-       '(
-         ;; Functions that are side-effect-free except for the
-         ;; behavior of functions passed as argument.
-         cl-mapcar cl-mapcan cl-maplist cl-map cl-mapcon
-         cl-reduce
-         cl-assoc cl-assoc-if cl-assoc-if-not
-         cl-rassoc cl-rassoc-if cl-rassoc-if-not
-         cl-member cl-member-if cl-member-if-not
-         cl-adjoin
-         cl-mismatch cl-search
-         cl-find cl-find-if cl-find-if-not
-         cl-position cl-position-if cl-position-if-not
-         cl-count cl-count-if cl-count-if-not
-         cl-remove cl-remove-if cl-remove-if-not
-         cl-remove-duplicates
-         cl-subst cl-subst-if cl-subst-if-not
-         cl-substitute cl-substitute-if cl-substitute-if-not
-         cl-sublis
-         cl-union cl-intersection cl-set-difference cl-set-exclusive-or
-         cl-subsetp
-         cl-every cl-some cl-notevery cl-notany
-         cl-tree-equal
-
-         ;; Functions that mutate and return a list.
-         cl-delete cl-delete-if cl-delete-if-not
-         cl-delete-duplicates
-         cl-nsubst cl-nsubst-if cl-nsubst-if-not
-         cl-nsubstitute cl-nsubstitute-if cl-nsubstitute-if-not
-         cl-nunion cl-nintersection cl-nset-difference cl-nset-exclusive-or
-         cl-nreconc cl-nsublis
-         cl-merge
-         ;; It's safe to ignore the value of `cl-sort' and `cl-stable-sort'
-         ;; when used on arrays, but most calls pass lists.
-         cl-sort cl-stable-sort
-         ))
-
 
 ;;; Types and assertions.
 

@@ -1,5 +1,5 @@
 /* Definitions and headers for communication with X protocol.
-   Copyright (C) 1989, 1993-1994, 1998-2024 Free Software Foundation,
+   Copyright (C) 1989, 1993-1994, 1998-2025 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -1494,7 +1494,7 @@ extern void x_mark_frame_dirty (struct frame *f);
 #define FRAME_X_VISUAL_INFO(f) (&FRAME_DISPLAY_INFO (f)->visual_info)
 
 /* Whether or not the frame is visible.  Do not test this alone.
-   Instead, use FRAME_REDISPLAY_P.  */
+   Instead, use frame_redisplay_p.  */
 #define FRAME_X_VISIBLE(f) (FRAME_X_OUTPUT (f)->visibility_state	\
 			    != VisibilityFullyObscured)
 

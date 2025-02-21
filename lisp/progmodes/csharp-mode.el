@@ -1,6 +1,6 @@
 ;;; csharp-mode.el --- Support for editing C#  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Theodor Thornhill <theo@thornhill.no>
 ;;              Jostein Kjønigsen <jostein@kjonigsen.net>
@@ -35,18 +35,11 @@
 (require 'cc-langs)
 (require 'treesit)
 (require 'c-ts-common) ; For comment indenting and filling.
+(treesit-declare-unavailable-functions)
 
 (eval-when-compile
   (require 'cc-fonts)
   (require 'rx))
-
-(declare-function treesit-parser-create "treesit.c")
-(declare-function treesit-induce-sparse-tree "treesit.c")
-(declare-function treesit-node-start "treesit.c")
-(declare-function treesit-node-type "treesit.c")
-(declare-function treesit-node-child-by-field-name "treesit.c")
-(declare-function treesit-query-capture "treesit.c")
-(declare-function treesit-query-compile "treesit.c")
 
 (defgroup csharp nil
   "Major mode for editing C# code."
@@ -342,7 +335,7 @@
            ;; Chained identifiers in using/namespace statements
            ,`(,(c-make-font-lock-search-function
                 csharp--regex-using-or-namespace
-                `((csharp--color-forwards font-lock-variable-name-face)
+                `((csharp--color-forwards 'font-lock-variable-name-face)
                   nil
                   (goto-char (match-end 0)))))
 
@@ -355,7 +348,7 @@
 
            ;; Single identifier in attribute
            (eval . (list (concat "\\[" csharp--regex-type-name-matcher "\\][^;]")
-                         1 font-lock-variable-name-face t))
+                         1 'font-lock-variable-name-face t))
 
            ;; Function names
            (eval . (list "\\([A-Za-z0-9_]+\\)\\(<[a-zA-Z0-9, ]+>\\)?("
@@ -368,7 +361,7 @@
            (eval . (list (concat "\\<nameof\\> *( *"
                                  csharp--regex-identifier-matcher
                                  " *) *")
-                         1 font-lock-variable-name-face))
+                         1 'font-lock-variable-name-face))
 
            ;; Catch statements with type only
            (eval . (list (concat "\\<catch\\> *( *"
@@ -743,6 +736,12 @@ compilation and evaluation time conflicts."
     (treesit-query-compile 'c-sharp "(interpolated_string_text)" t)
     t))
 
+(defun csharp-ts-mode--test-string-content ()
+  "Return non-nil if (interpolated_string_text) is in the grammar."
+  (ignore-errors
+    (treesit-query-compile 'c-sharp "(string_content)" t)
+    t))
+
 (defun csharp-ts-mode--test-type-constraint ()
   "Return non-nil if (type_constraint) is in the grammar."
   (ignore-errors
@@ -753,6 +752,12 @@ compilation and evaluation time conflicts."
   "Return non-nil if (type_of_expression) is in the grammar."
   (ignore-errors
     (treesit-query-compile 'c-sharp "(type_of_expression)" t)
+    t))
+
+(defun csharp-ts-mode--test-typeof-expression ()
+  "Return non-nil if (type_of_expression) is in the grammar."
+  (ignore-errors
+    (treesit-query-compile 'c-sharp "(typeof_expression)" t)
     t))
 
 (defun csharp-ts-mode--test-name-equals ()
@@ -831,10 +836,12 @@ compilation and evaluation time conflicts."
      (boolean_literal) @font-lock-constant-face)
 
    :language 'c-sharp
-   :override t
    :feature 'string
    `([(string_literal)
       (verbatim_string_literal)
+      ,@ (when (csharp-ts-mode--test-string-content)
+           '((string_content)
+             "\""))
       ,@(if (csharp-ts-mode--test-interpolated-string-text)
             '((interpolated_string_text)
               (interpolated_verbatim_string_text)
@@ -878,7 +885,9 @@ compilation and evaluation time conflicts."
            (type_parameter_constraint (type type: (generic_name (identifier) @font-lock-type-face)))))
 
      ,@(when (csharp-ts-mode--test-type-of-expression)
-         '((type_of_expression (identifier) @font-lock-type-face))
+         '((type_of_expression (identifier) @font-lock-type-face)))
+
+     ,@(when (csharp-ts-mode--test-typeof-expression)
          '((typeof_expression (identifier) @font-lock-type-face)))
 
      (object_creation_expression

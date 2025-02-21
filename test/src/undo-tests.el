@@ -1,6 +1,6 @@
 ;;; undo-tests.el --- Tests of primitive-undo -*- lexical-binding: t -*-
 
-;; Copyright (C) 2012-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2025 Free Software Foundation, Inc.
 
 ;; Author: Aaron S. Hawley <aaron.s.hawley@gmail.com>
 
@@ -150,7 +150,7 @@
   (with-temp-buffer
     (buffer-enable-undo)
     (dotimes (i 1048576)
-      (if (zerop (% i 2))
+      (if (evenp i)
           (insert "Evenses")
         (insert "Oddses")))
     (undo-boundary)

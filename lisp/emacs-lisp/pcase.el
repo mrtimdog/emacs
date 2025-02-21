@@ -1,6 +1,6 @@
 ;;; pcase.el --- ML-style pattern-matching macro for Elisp -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: extensions
@@ -370,7 +370,7 @@ undetected, binding variables to arbitrary values, such as nil.
   (cond
    (args
     (let ((arg-length (length args)))
-      (unless (= 0 (mod arg-length 2))
+      (unless (evenp arg-length)
         (signal 'wrong-number-of-arguments
                 (list 'pcase-setq (+ 2 arg-length)))))
     (let ((result))

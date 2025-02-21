@@ -1,6 +1,6 @@
 ;;; eww.el --- Emacs Web Wowser  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: html
@@ -51,6 +51,17 @@
   :version "24.4"
   :group 'eww
   :type 'string)
+
+(defcustom eww-search-confirm-send-region t
+  "Whether to ask for confirmation before sending the region to a search engine.
+Non-nil if EWW should ask for confirmation before sending the
+selected region to the configured search engine.  This is the
+default to mitigate the risk of accidental data leak.  Set this
+variable to nil to send the region to the search engine
+straightaway."
+  :version "31.1"
+  :group 'eww
+  :type 'boolean)
 
 (defcustom eww-search-prefix "https://duckduckgo.com/html/?q="
   "Prefix URL to search engine."
@@ -597,15 +608,21 @@ new buffer instead of reusing the default EWW buffer."
 ;;;###autoload
 (defun eww-search-words ()
   "Search the web for the text in the region.
-If region is active (and not whitespace), search the web for
-the text between region beginning and end.  Else, prompt the
+If region is active (and not whitespace), search the web for the
+text between region beginning and end, subject to user's confirmation
+controlled by `eww-search-confirm-send-region'.  Else, prompt the
 user for a search string.  See the variable `eww-search-prefix'
 for the search engine used."
   (interactive)
   (if (use-region-p)
       (let ((region-string (buffer-substring (region-beginning) (region-end))))
         (if (not (string-match-p "\\`[ \n\t\r\v\f]*\\'" region-string))
-            (eww region-string)
+            (when
+                (or (not eww-search-confirm-send-region)
+                    (yes-or-no-p
+                     (format-message
+                      "Really send the region to the search engine? ")))
+              (eww region-string))
           (call-interactively #'eww)))
     (call-interactively #'eww)))
 
@@ -1405,6 +1422,7 @@ within text input fields."
 (declare-function imagep "image.c")
 (defvar text-scale-mode)
 (defvar text-scale-mode-amount)
+(defvar image-scaling-factor)
 (defun eww--rescale-images ()
   (let ((scaling (if text-scale-mode
                      (+ 1 (* text-scale-mode-amount 0.1))
@@ -2142,11 +2160,15 @@ Interactively, EVENT is the value of `last-nonmenu-event'."
 
 (defun eww-browse-with-external-browser (&optional url)
   "Browse the current URL with an external browser.
-The browser to used is specified by the
-`browse-url-secondary-browser-function' variable."
+Use `browse-url-secondary-browser-function' if it is an external
+browser, otherwise use `browse-url-with-browser-kind' to open an
+external browser."
   (interactive nil eww-mode)
-  (funcall browse-url-secondary-browser-function
-           (or url (plist-get eww-data :url))))
+  (setq url (or url (plist-get eww-data :url)))
+  (if (eq 'external (browse-url--browser-kind
+                     browse-url-secondary-browser-function url))
+      (funcall browse-url-secondary-browser-function url)
+    (browse-url-with-browser-kind 'external url)))
 
 (defun eww-remove-tracking (url)
   "Remove the commong utm_ tracking cookies from URLs."
@@ -2160,11 +2182,12 @@ The browser to used is specified by the
     url))
 
 (defun eww-follow-link (&optional external mouse-event)
-  "Browse the URL under point.
-If EXTERNAL is single prefix, browse the URL using
-`browse-url-secondary-browser-function'.
+  "Browse the URL at point, optionally the position of MOUSE-EVENT.
 
-If EXTERNAL is double prefix, browse in new buffer."
+EXTERNAL is the prefix argument.  If called interactively with
+\\[universal-argument] pressed once, browse the URL using
+`eww-browse-with-external-browser'.  If called interactively, with
+\\[universal-argument] pressed twice, browse in new buffer."
   (interactive
    (list current-prefix-arg last-nonmenu-event)
    eww-mode)
@@ -2180,7 +2203,7 @@ If EXTERNAL is double prefix, browse in new buffer."
       ;; and `browse-url-mailto-function'.
       (browse-url url))
      ((and (consp external) (<= (car external) 4))
-      (funcall browse-url-secondary-browser-function url)
+      (eww-browse-with-external-browser url)
       (shr--blink-link))
      ;; This is a #target url in the same page as the current one.
      ((and (setq target (url-target (url-generic-parse-url url)))
@@ -2214,8 +2237,16 @@ Differences in #targets are ignored."
   (kill-new (plist-get eww-data :url)))
 
 (defun eww-download ()
-  "Download URL to `eww-download-directory'.
-Use link at point if there is one, else the current page's URL."
+  "Download a Web page to `eww-download-directory'.
+Use link at point if there is one, else the current page's URL.
+This command downloads the page to the download directory, under
+a file name generated from the last portion of the page's URL,
+after the last slash.  (If URL ends in a slash, the page will be
+saved under the name \"!\".)
+If there's already a file by that name in the download directory,
+this command will modify the name to make it unique.
+The command shows in the echo-area the actual file name where the
+page was saved."
   (interactive nil eww-mode)
   (let ((dir (if (stringp eww-download-directory)
                  eww-download-directory
@@ -2359,6 +2390,7 @@ If CHARSET is nil then use UTF-8."
 	     (plist-get eww-data :title))))
 
 (defun eww-write-bookmarks ()
+  "Write the bookmarks in `eww-bookmarks-directory'."
   (with-temp-file (expand-file-name "eww-bookmarks" eww-bookmarks-directory)
     (insert ";; Auto-generated file; don't edit -*- mode: lisp-data -*-\n")
     (let ((print-length nil)
@@ -2378,115 +2410,146 @@ If ERROR-OUT, signal user-error if there are no bookmarks."
       (user-error "No bookmarks are defined"))))
 
 ;;;###autoload
-(defun eww-list-bookmarks ()
-  "Display the bookmarks."
+(defun eww-list-bookmarks (&optional build-only)
+  "Display the eww bookmarks.
+Optional argument BUILD-ONLY, when non-nil, means to build the buffer
+without popping it."
   (interactive)
   (eww-read-bookmarks t)
-  (pop-to-buffer "*eww bookmarks*")
-  (eww-bookmark-prepare))
+  (with-current-buffer (get-buffer-create "*eww bookmarks*")
+    (eww-bookmark-mode)
+    (eww--bookmark-prepare))
+  (unless build-only
+    (pop-to-buffer "*eww bookmarks*")))
 
-(defun eww-bookmark-prepare ()
-  (set-buffer (get-buffer-create "*eww bookmarks*"))
-  (eww-bookmark-mode)
-  (let* ((width (/ (window-width) 2))
-	 (format (format "%%-%ds %%s" width))
-	 (inhibit-read-only t)
-	 start title)
+(defun eww--bookmark-prepare ()
+  "Display a table with the list of eww bookmarks.
+Will remove all buffer contents first."
+  (let ((inhibit-read-only t))
     (erase-buffer)
-    (setq header-line-format (concat " " (format format "Title" "URL")))
-    (dolist (bookmark eww-bookmarks)
-      (setq start (point)
-	    title (plist-get bookmark :title))
-      (when (> (length title) width)
-	(setq title (truncate-string-to-width title width)))
-      (insert (format format title (plist-get bookmark :url)) "\n")
-      (put-text-property start (1+ start) 'eww-bookmark bookmark))
-    (goto-char (point-min))))
+    (make-vtable
+     :columns '((:name "Order" :min-width 6)
+                (:name "Title" :min-width "25%" :max-width "50%")
+                (:name "URL"))
+     :objects-function #'eww--bookmark-format-data
+     ;; use fixed-font face
+     :face 'default
+     :sort-by '((0 . ascend))
+     )))
+
+(defun eww--bookmark-format-data ()
+  "Format `eww-bookmarks' for use in a vtable.
+The data is returned as a list (order title url bookmark), for use
+in of `eww-bookmark-mode'.  Order stars counting from 1."
+  (seq-map-indexed (lambda (bm index)
+                     (list
+                      (+ 1 index)
+                      (plist-get bm :title)
+                      (plist-get bm :url)
+                      bm))
+                   eww-bookmarks))
 
 (defvar eww-bookmark-kill-ring nil)
+
+(defun eww--bookmark-check-order-sort ()
+  "Signal a user error unless the bookmark vtable is sorted by asc order."
+  ;; vtables sort respecting the previous sort column. As long as
+  ;; "order" was last, the kill/yank operations will make sense, no
+  ;; matter what sort was used before.
+  (when-let* ((the-table (vtable-current-table))
+              (last-sort-pair (car (last (vtable-sort-by the-table)))))
+    (unless (and (= 0 (car last-sort-pair))
+                 (eq 'ascend (cdr last-sort-pair)))
+      (user-error
+       "Can't kill/yank bookmarks unless the table is sorted by ascending Order"))))
 
 (defun eww-bookmark-kill ()
   "Kill the current bookmark."
   (interactive nil eww-bookmark-mode)
-  (let* ((start (line-beginning-position))
-	 (bookmark (get-text-property start 'eww-bookmark))
-	 (inhibit-read-only t))
-    (unless bookmark
+  (eww--bookmark-check-order-sort)
+  (let ((bookmark-at-point (nth 3 (vtable-current-object)))
+	(position (point)))
+    (unless bookmark-at-point
       (user-error "No bookmark on the current line"))
     (forward-line 1)
-    (push (buffer-substring start (point)) eww-bookmark-kill-ring)
-    (delete-region start (point))
-    (setq eww-bookmarks (delq bookmark eww-bookmarks))
-    (eww-write-bookmarks)))
+    (push bookmark-at-point eww-bookmark-kill-ring)
+    (setq eww-bookmarks (delq bookmark-at-point eww-bookmarks))
+    (eww-write-bookmarks)
+    (when (= (point) (point-max))
+      (forward-line -1)) ; don't go outside the vtable, or reverting fails
+    (vtable-revert-command)
+    (goto-char position)))
 
 (defun eww-bookmark-yank ()
   "Yank a previously killed bookmark to the current line."
   (interactive nil eww-bookmark-mode)
+  (eww--bookmark-check-order-sort)
   (unless eww-bookmark-kill-ring
     (user-error "No previously killed bookmark"))
-  (beginning-of-line)
-  (let ((inhibit-read-only t)
-	(start (point))
-	bookmark)
-    (insert (pop eww-bookmark-kill-ring))
-    (setq bookmark (get-text-property start 'eww-bookmark))
-    (if (= start (point-min))
-	(push bookmark eww-bookmarks)
-      (let ((line (count-lines start (point))))
-	(setcdr (nthcdr (1- line) eww-bookmarks)
-		(cons bookmark (nthcdr line eww-bookmarks)))))
-    (eww-write-bookmarks)))
+  (let* ((bookmark-at-point (nth 3 (vtable-current-object)))
+         (index-bap (seq-position eww-bookmarks bookmark-at-point))
+         ;; store in a list, for simpler concat
+         (bookmark-to-insert (list (pop eww-bookmark-kill-ring)))
+         (position (point)))
+    (setq eww-bookmarks
+          (if (= (point) (point-max))
+              ;; special case: point is in the last line of the buffer,
+              ;; so we know to append the bookmark at the end
+              (progn
+                (goto-char (point-min)) ; move inside the vtable instance
+                (seq-concatenate 'list eww-bookmarks bookmark-to-insert))
+            ;; TODO: a simpler way of doing this?
+            (seq-concatenate 'list
+                             (seq-subseq eww-bookmarks 0 index-bap)
+                             bookmark-to-insert
+                             (seq-subseq eww-bookmarks index-bap))))
+    (eww-write-bookmarks)
+    (vtable-revert-command)
+    (vtable-beginning-of-table)
+    (goto-char position)))
 
 (defun eww-bookmark-browse ()
   "Browse the bookmark under point in eww."
   (interactive nil eww-bookmark-mode)
-  (let ((bookmark (get-text-property (line-beginning-position) 'eww-bookmark)))
-    (unless bookmark
+  (let ((bookmark-at-point (nth 3 (vtable-current-object))))
+    (unless bookmark-at-point
       (user-error "No bookmark on the current line"))
     (quit-window)
-    (eww-browse-url (plist-get bookmark :url))))
+    (eww-browse-url (plist-get bookmark-at-point :url))))
 
 (defun eww-next-bookmark ()
   "Go to the next bookmark in the list."
   (interactive nil eww-bookmark-mode)
-  (let ((first nil)
-	bookmark)
+  (let (fresh-buffer target-bookmark)
     (unless (get-buffer "*eww bookmarks*")
-      (setq first t)
-      (eww-read-bookmarks t)
-      (eww-bookmark-prepare))
+      (setq fresh-buffer t)
+      (eww-list-bookmarks t))
     (with-current-buffer "*eww bookmarks*"
-      (when (and (not first)
-		 (not (eobp)))
-	(forward-line 1))
-      (setq bookmark (get-text-property (line-beginning-position)
-					'eww-bookmark))
-      (unless bookmark
-	(user-error "No next bookmark")))
-    (eww-browse-url (plist-get bookmark :url))))
+      (unless fresh-buffer
+        (forward-line 1))
+      (setq target-bookmark (nth 3 (vtable-current-object))))
+    (unless target-bookmark
+      ;; usually because we moved past end of the table
+      (user-error "No next bookmark"))
+    (eww-browse-url (plist-get target-bookmark :url))))
 
 (defun eww-previous-bookmark ()
   "Go to the previous bookmark in the list."
   (interactive nil eww-bookmark-mode)
-  (let ((first nil)
-	bookmark)
+  (let (fresh-buffer target-bookmark)
     (unless (get-buffer "*eww bookmarks*")
-      (setq first t)
-      (eww-read-bookmarks t)
-      (eww-bookmark-prepare))
+      (setq fresh-buffer t)
+      (eww-list-bookmarks t))
     (with-current-buffer "*eww bookmarks*"
-      (if first
-	  (goto-char (point-max))
-	(beginning-of-line))
-      ;; On the final line.
-      (when (eolp)
-	(forward-line -1))
-      (if (bobp)
-	  (user-error "No previous bookmark")
-	(forward-line -1))
-      (setq bookmark (get-text-property (line-beginning-position)
-					'eww-bookmark)))
-    (eww-browse-url (plist-get bookmark :url))))
+      (when fresh-buffer
+	(vtable-end-of-table))
+      ;; didn't move to a previous line, because we
+      ;; were already on the first one
+      (unless (= -1 (forward-line -1))
+        (setq target-bookmark (nth 3 (vtable-current-object)))))
+    (unless target-bookmark
+      (user-error "No previous bookmark"))
+    (eww-browse-url (plist-get target-bookmark :url))))
 
 (defun eww-bookmark-urls ()
   "Get the URLs from the current list of bookmarks."
@@ -2501,9 +2564,9 @@ If ERROR-OUT, signal user-error if there are no bookmarks."
   :menu '("Eww Bookmark"
           ["Exit" quit-window t]
           ["Browse" eww-bookmark-browse
-           :active (get-text-property (line-beginning-position) 'eww-bookmark)]
+           :active (nth 3 (vtable-current-object))]
           ["Kill" eww-bookmark-kill
-           :active (get-text-property (line-beginning-position) 'eww-bookmark)]
+           :active (nth 3 (vtable-current-object))]
           ["Yank" eww-bookmark-yank
            :active eww-bookmark-kill-ring]))
 
@@ -2921,31 +2984,34 @@ with completion.  If there are none, return nil."
                             (mapcar #'caddr alternates))))
           (sep-width (string-pixel-width " ")))
       (if (cdr alternates)
-          (let ((completion-extra-properties
-                 (list :annotation-function
-                       (lambda (feed)
-                         (let* ((attrs (alist-get feed
-                                                  alternates
-                                                  nil
-                                                  nil
-                                                  #'string=))
-                                (type (car attrs))
-                                (title (cadr attrs)))
+            (completing-read
+             "Alternate URL: "
+             (completion-table-with-metadata
+              alternates
+              `((annotation-function
+                 . ,(lambda (feed)
+                      (let* ((attrs (alist-get feed
+                                               alternates
+                                               nil
+                                               nil
+                                               #'string=))
+                             (type (car attrs))
+                             (title (cadr attrs)))
+                        (concat
+                         (propertize " " 'display
+                                     `(space :align-to
+                                             (,(+ sep-width
+                                                  url-max-width))))
+                         title
+                         (when type
                            (concat
                             (propertize " " 'display
                                         `(space :align-to
-                                                (,(+ sep-width
-                                                     url-max-width))))
-                            title
-                            (when type
-                              (concat
-                               (propertize " " 'display
-                                           `(space :align-to
-                                                   (,(+ (* 2 sep-width)
-                                                        url-max-width
-                                                        title-max-width))))
-                               "[" type "]"))))))))
-            (completing-read "Alternate URL: " alternates nil t))
+                                                (,(+ (* 2 sep-width)
+                                                     url-max-width
+                                                     title-max-width))))
+                            "[" type "]"))))))))
+             nil t)
         (caar alternates)))))
 
 (defun eww-copy-alternate-url ()

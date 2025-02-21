@@ -1,6 +1,6 @@
 ;;; sh-script.el --- shell-script editing commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1997, 1999, 2001-2024 Free Software Foundation,
+;; Copyright (C) 1993-1997, 1999, 2001-2025 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>
@@ -149,8 +149,7 @@
   (require 'subr-x))
 (require 'executable)
 (require 'treesit)
-
-(declare-function treesit-parser-create "treesit.c")
+(treesit-declare-unavailable-functions)
 
 (autoload 'comint-completion-at-point "comint")
 (autoload 'comint-filename-completion "comint")
@@ -1129,9 +1128,9 @@ subshells can nest."
   (let ((q (nth 3 state)))
     (if q
         (if (characterp q)
-            (if (eq q ?\`) 'sh-quoted-exec font-lock-string-face)
+            (if (eq q ?\`) 'sh-quoted-exec 'font-lock-string-face)
           'sh-heredoc)
-      font-lock-comment-face)))
+      'font-lock-comment-face)))
 
 (defgroup sh-indentation nil
   "Variables controlling indentation in shell scripts.
@@ -1447,8 +1446,9 @@ If FORCE is non-nil and no process found, create one."
 (defun sh-show-shell ()
   "Pop the shell interaction buffer."
   (interactive)
-  (with-suppressed-warnings ((obsolete display-comint-buffer-action))
-    (pop-to-buffer (process-buffer (sh-shell-process t)) display-comint-buffer-action)))
+  (pop-to-buffer (process-buffer (sh-shell-process t))
+                 (append display-buffer--same-window-action
+                         '((category . comint)))))
 
 (defun sh-send-text (text)
   "Send TEXT to `sh-shell-process'."
@@ -1646,10 +1646,45 @@ not written in Bash or sh."
                 sh-mode--treesit-settings)
     (setq-local treesit-thing-settings
                 `((bash
-                   (sentence ,(regexp-opt '("comment"
-                                            "heredoc_start"
-                                            "heredoc_body"))))))
+                   (list
+                    ,(rx bos (or "do_group"
+                                 "if_statement"
+                                 "case_statement"
+                                 "compound_statement"
+                                 "subshell"
+                                 "test_command"
+                                 "parenthesized_expression"
+                                 "arithmetic_expansion"
+                                 "brace_expression"
+                                 "string"
+                                 "array"
+                                 "expansion" ;; but not "simple_expansion"
+                                 "command_substitution"
+                                 "process_substitution")
+                         eos))
+                   (sentence
+                    ,(rx bos (or "redirected_statement"
+                                 "declaration_command"
+                                 "unset_command"
+                                 "command"
+                                 "variable_assignment")
+                         eos))
+                   (text
+                    ,(rx bos (or "comment"
+                                 "heredoc_body")
+                         eos)))))
     (setq-local treesit-defun-type-regexp "function_definition")
+    (setq-local treesit-defun-name-function
+                (lambda (node)
+                  (treesit-node-text
+                   (treesit-node-child-by-field-name node "name")
+                   t)))
+    (setq-local treesit-simple-imenu-settings
+                '((nil "\\`function_definition\\'" nil nil)))
+    ;; Override regexp-based outline variable from `sh-base-mode'
+    ;; to use `treesit-simple-imenu-settings' for outlines:
+    (kill-local-variable 'outline-regexp)
+
     (treesit-major-mode-setup)))
 
 (derived-mode-add-parents 'bash-ts-mode '(sh-mode))

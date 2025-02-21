@@ -1,6 +1,6 @@
 ;;; erc-goodies.el --- Collection of ERC modules  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Jorgen Schaefer <forcer@forcix.cx>
 ;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
@@ -372,7 +372,9 @@ than the indicator's position."
   "Buffer-local `keep-place' with fringe arrow and/or highlighted face.
 Play nice with global module `keep-place' but don't depend on it.
 Expect that users may want different combinations of `keep-place'
-and `keep-place-indicator' in different buffers."
+and `keep-place-indicator' in different buffers.
+
+This module is local to individual buffers."
   ((cond (erc-keep-place-mode)
          ((memq 'keep-place erc-modules)
           (erc-keep-place-mode +1))
@@ -424,7 +426,7 @@ and `keep-place-indicator' in different buffers."
    (remove-hook 'erc-keep-place-mode-hook
                 #'erc--keep-place-indicator-on-global-module t)
    (kill-local-variable 'erc--keep-place-indicator-overlay))
-  'local)
+  localp)
 
 (defun erc--keep-place-indicator-on-global-module ()
   "Ensure `keep-place-indicator' survives toggling `erc-keep-place-mode'.
@@ -589,14 +591,16 @@ message's speaker."
 Skip those appearing in `erc-noncommands-list'.
 
 Users can run \\[erc-command-indicator-toggle-hidden] to hide and
-reveal echoed command lines after they've been inserted."
+reveal echoed command lines after they've been inserted.
+
+This module is local to individual buffers."
   ((add-hook 'erc--input-review-functions
              #'erc--command-indicator-permit-insertion 80 t)
    (erc-command-indicator-toggle-hidden -1))
   ((remove-hook 'erc--input-review-functions
                 #'erc--command-indicator-permit-insertion t)
    (erc-command-indicator-toggle-hidden +1))
-  'local)
+  localp)
 
 (defun erc-command-indicator ()
   "Return the command-indicator prompt as a string.

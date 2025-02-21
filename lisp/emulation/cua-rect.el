@@ -1,6 +1,6 @@
 ;;; cua-rect.el --- CUA unified rectangle support  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2025 Free Software Foundation, Inc.
 
 ;; Author: Kim F. Storm <storm@cua.dk>
 ;; Keywords: keyboard emulations convenience CUA
@@ -187,7 +187,7 @@ Activates the region if needed.  Only lasts until the region is deactivated."
   ;; t if point is on right side of rectangle.
   (if (and topbot (= (cua--rectangle-left) (cua--rectangle-right)))
       (< (cua--rectangle-corner) 2)
-    (= (mod (cua--rectangle-corner) 2) 1)))
+    (oddp (cua--rectangle-corner))))
 
 (defun cua--rectangle-column ()
   (if (cua--rectangle-right-side)

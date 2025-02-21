@@ -1,6 +1,6 @@
 ;;; gv.el --- generalized variables  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2012-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: extensions
@@ -182,7 +182,7 @@ If CURRENT-NAME is a string, that is the `use instead' message.
 WHEN should be a string indicating when the variable was first
 made obsolete, for example a date or a release number."
   (put obsolete-name 'byte-obsolete-generalized-variable
-       (purecopy (list current-name when)))
+       (list current-name when))
   obsolete-name)
 
 ;; Additions for `declare'.  We specify the values as named aliases so
@@ -294,7 +294,7 @@ The return value is the last VAL in the list.
 
 \(fn PLACE VAL PLACE VAL ...)"
   (declare (debug (&rest [gv-place form])))
-  (if (/= (logand (length args) 1) 0)
+  (if (oddp (length args))
       (signal 'wrong-number-of-arguments (list 'setf (length args))))
   (if (and args (null (cddr args)))
       (let ((place (pop args))

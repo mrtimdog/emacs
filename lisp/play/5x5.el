@@ -1,6 +1,6 @@
 ;;; 5x5.el --- simple little puzzle game  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: Dave Pearson <davep@davep.org>
 ;; Created: 1998-10-03
@@ -312,7 +312,7 @@ Quit current game           \\[5x5-quit-game]"
 		  (forward-char  (+ 1 (/ (1+ 5x5-x-scale) 2)))
 		  (dotimes (x 5x5-grid-size)
 		    (when (5x5-cell solution-grid y x)
-		      (if (= 0 (mod 5x5-x-scale 2))
+		      (if (evenp 5x5-x-scale)
 			  (progn
 			    (insert "()")
 			    (delete-region (point) (+ (point) 2))

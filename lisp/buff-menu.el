@@ -1,6 +1,6 @@
 ;;; buff-menu.el --- Interface for viewing and manipulating buffers -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: convenience
@@ -134,6 +134,14 @@ If this is nil, group names are unsorted."
                  (function :tag "Custom function"))
   :group 'Buffer-menu
   :version "30.1")
+
+(defcustom Buffer-menu-human-readable-sizes nil
+  "If non-nil, show buffer sizes in human-readable format.
+That means to use `file-size-human-readable' (which see) to format the
+buffer sizes in the buffer size column."
+  :type 'boolean
+  :group 'Buffer-menu
+  :version "31.1")
 
 (defvar-local Buffer-menu-files-only nil
   "Non-nil if the current Buffer Menu lists only file buffers.
@@ -831,7 +839,10 @@ See more at `Buffer-menu-filter-predicate'."
 				(if buffer-read-only "%" " ")
 				(if (buffer-modified-p) "*" " ")
 				(Buffer-menu--pretty-name name)
-				(number-to-string (buffer-size))
+				(funcall (if Buffer-menu-human-readable-sizes
+                                             #'file-size-human-readable
+                                           #'number-to-string)
+                                         (buffer-size))
 				(concat (format-mode-line mode-name
                                                           nil nil buffer)
 					(if mode-line-process

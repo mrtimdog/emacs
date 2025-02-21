@@ -1,6 +1,6 @@
 ;;; image-mode.el --- support for visiting image files  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2005-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2025 Free Software Foundation, Inc.
 ;;
 ;; Author: Richard Stallman <rms@gnu.org>
 ;; Keywords: multimedia
@@ -1564,7 +1564,7 @@ The percentage is in relation to the original size of the image."
   (interactive (list (read-number "Scale (% of original): " 100
                                   'read-number-history))
                image-mode)
-  (unless (cl-plusp scale)
+  (unless (plusp scale)
     (error "Not a positive number: %s" scale))
   (setq image-transform-resize (/ scale 100.0))
   (image-toggle-display-image))

@@ -1,6 +1,6 @@
 ;;; ibuf-macs.el --- macros for ibuffer  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Colin Walters <walters@verbum.org>
 ;; Maintainer: John Paul Wallington <jpw@gnu.org>
@@ -146,7 +146,7 @@ value if and only if `a' is \"less than\" `b'.
   `(progn
      (defun ,(intern (concat "ibuffer-do-sort-by-" (symbol-name name))) ()
        ,(or documentation "No :documentation specified for this sorting method.")
-       (interactive)
+       (interactive "@")
        (setq ibuffer-sorting-mode ',name)
        (when (eq ibuffer-sorting-mode ibuffer-last-sorting-mode)
 	 (setq ibuffer-sorting-reversep (not ibuffer-sorting-reversep)))

@@ -1,6 +1,6 @@
 ;;; go-ts-mode.el --- tree-sitter support for Go  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Randy Taylor <dev@rjt.dev>
 ;; Maintainer : Randy Taylor <dev@rjt.dev>
@@ -22,22 +22,29 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
+;;; Tree-sitter language versions
+;;
+;; go-ts-mode is known to work with the following languages and version:
+;; - tree-sitter-go: v0.23.4-1-g12fe553
+;; - tree-sitter-go-mod: v1.1.0-3b01edce
+;; - tree-sitter-go-work: 949a8a47
+;;
+;; We try our best to make builtin modes work with latest grammar
+;; versions, so a more recent grammar version has a good chance to work.
+;; Send us a bug report if it doesn't.
+
 ;;; Commentary:
 ;;
+;; Go uses tabs as a convention for indentation:
+;; https://go.dev/doc/effective_go#formatting
+;; so `indent-tabs-mode' is enabled for the modes.
 
 ;;; Code:
 
 (require 'treesit)
+(require 'c-ts-common)
 (eval-when-compile (require 'rx))
-
-(declare-function treesit-parser-create "treesit.c")
-(declare-function treesit-induce-sparse-tree "treesit.c")
-(declare-function treesit-node-child "treesit.c")
-(declare-function treesit-node-child-by-field-name "treesit.c")
-(declare-function treesit-node-start "treesit.c")
-(declare-function treesit-node-end "treesit.c")
-(declare-function treesit-node-type "treesit.c")
-(declare-function treesit-search-subtree "treesit.c")
+(treesit-declare-unavailable-functions)
 
 (defcustom go-ts-mode-indent-offset 8
   "Number of spaces for each indentation step in `go-ts-mode'."
@@ -48,6 +55,12 @@
 
 (defcustom go-ts-mode-build-tags nil
   "List of Go build tags for the test commands."
+  :version "31.1"
+  :type '(repeat string)
+  :group 'go)
+
+(defcustom go-ts-mode-test-flags nil
+  "List of extra flags for the Go test commands."
   :version "31.1"
   :type '(repeat string)
   :group 'go)
@@ -96,9 +109,11 @@
      ((parent-is "parameter_list") parent-bol go-ts-mode-indent-offset)
      ((parent-is "select_statement") parent-bol 0)
      ((parent-is "type_case") parent-bol go-ts-mode-indent-offset)
+     ((parent-is "type_declaration") parent-bol go-ts-mode-indent-offset)
      ((parent-is "type_spec") parent-bol go-ts-mode-indent-offset)
      ((parent-is "type_switch_statement") parent-bol 0)
      ((parent-is "var_declaration") parent-bol go-ts-mode-indent-offset)
+     ((parent-is "var_spec_list") parent-bol go-ts-mode-indent-offset)
      (no-node parent-bol 0)))
   "Tree-sitter indent rules for `go-ts-mode'.")
 
@@ -265,9 +280,7 @@
     (setq treesit-primary-parser (treesit-parser-create 'go))
 
     ;; Comments.
-    (setq-local comment-start "// ")
-    (setq-local comment-end "")
-    (setq-local comment-start-skip (rx "//" (* (syntax whitespace))))
+    (c-ts-common-comment-setup)
 
     ;; Navigation.
     (setq-local treesit-defun-type-regexp
@@ -392,13 +405,20 @@ specifying build tags."
       (format "-tags %s" (string-join go-ts-mode-build-tags ","))
     ""))
 
+(defun go-ts-mode--get-test-flags ()
+  "Return the flags for test invocation."
+  (if go-ts-mode-test-flags
+      (mapconcat #'shell-quote-argument go-ts-mode-test-flags " ")
+    ""))
+
 (defun go-ts-mode--compile-test (regexp)
   "Compile the tests matching REGEXP.
 This function respects the `go-ts-mode-build-tags' variable for
 specifying build tags."
-  (compile (format "go test -v %s -run '%s'"
+  (compile (format "go test -v %s -run '%s' %s"
                    (go-ts-mode--get-build-tags-flag)
-                   regexp)))
+                   regexp
+                   (go-ts-mode--get-test-flags))))
 
 (defun go-ts-mode--find-defun-at (start)
   "Return the first defun node from START."
@@ -457,11 +477,12 @@ be run."
 (defun go-ts-mode-test-this-package ()
   "Run all the unit tests under the current package."
   (interactive)
-  (compile (format "go test -v %s -run %s"
+  (compile (format "go test -v %s %s %s"
                    (go-ts-mode--get-build-tags-flag)
-                   default-directory)))
+                   default-directory
+                   (go-ts-mode--get-test-flags))))
 
-;; go.mod support.
+;;;; go.mod support.
 
 (defvar go-mod-ts-mode--syntax-table
   (let ((table (make-syntax-table)))
@@ -478,12 +499,12 @@ be run."
      ((parent-is "replace_directive") parent-bol go-ts-mode-indent-offset)
      ((parent-is "require_directive") parent-bol go-ts-mode-indent-offset)
      ((parent-is "retract_directive") parent-bol go-ts-mode-indent-offset)
-     ((go-mod-ts-mode--in-directive-p) no-indent go-ts-mode-indent-offset)
+     ((go-mod-ts-mode--directive-matcher) no-indent go-ts-mode-indent-offset)
      (no-node no-indent 0)))
   "Tree-sitter indent rules for `go-mod-ts-mode'.")
 
-(defun go-mod-ts-mode--in-directive-p ()
-  "Return non-nil if point is inside a directive.
+(defun go-mod-ts-mode--directive-matcher ()
+  "Return a function for determining if point is inside a Go module directive.
 When entering an empty directive or adding a new entry to one, no node
 will be present meaning none of the indentation rules will match,
 because there is no parent to match against.  This function determines
@@ -493,12 +514,12 @@ what the parent of the node would be if it were a node."
       (save-excursion
         (backward-up-list)
         (back-to-indentation)
-        (pcase (treesit-node-type (treesit-node-at (point)))
-          ("exclude" t)
-          ("module" t)
-          ("replace" t)
-          ("require" t)
-          ("retract" t))))))
+        (member (treesit-node-type (treesit-node-at (point)))
+                '("exclude"
+                  "module"
+                  "replace"
+                  "require"
+                  "retract"))))))
 
 (defvar go-mod-ts-mode--keywords
   '("exclude" "go" "module" "replace" "require" "retract")
@@ -542,9 +563,7 @@ what the parent of the node would be if it were a node."
     (setq treesit-primary-parser (treesit-parser-create 'gomod))
 
     ;; Comments.
-    (setq-local comment-start "// ")
-    (setq-local comment-end "")
-    (setq-local comment-start-skip (rx "//" (* (syntax whitespace))))
+    (c-ts-common-comment-setup)
 
     ;; Indent.
     (setq-local indent-tabs-mode t
@@ -564,6 +583,94 @@ what the parent of the node would be if it were a node."
 
 (if (treesit-ready-p 'gomod)
     (add-to-list 'auto-mode-alist '("/go\\.mod\\'" . go-mod-ts-mode)))
+
+;;;; go.work support.
+
+(defvar go-work-ts-mode--indent-rules
+  `((gowork
+     ((node-is ")") parent-bol 0)
+     ((parent-is "replace_directive") parent-bol go-ts-mode-indent-offset)
+     ((parent-is "use_directive") parent-bol go-ts-mode-indent-offset)
+     ((go-work-ts-mode--directive-matcher) no-indent go-ts-mode-indent-offset)
+     (no-node no-indent 0)))
+  "Tree-sitter indent rules for `go-work-ts-mode'.")
+
+(defun go-work-ts-mode--directive-matcher ()
+  "Return a function for determining if point is inside a Go workspace directive.
+When entering an empty directive or adding a new entry to one, no node
+will be present meaning none of the indentation rules will match,
+because there is no parent to match against.  This function determines
+what the parent of the node would be if it were a node."
+  (lambda (node _ _ &rest _)
+    (unless (treesit-node-type node)
+      (save-excursion
+        (backward-up-list)
+        (back-to-indentation)
+        (member (treesit-node-type (treesit-node-at (point)))
+                '("replace"
+                  "use"))))))
+
+(defvar go-work-ts-mode--keywords
+  '("go" "replace" "use")
+  "go.work keywords for tree-sitter font-locking.")
+
+(defvar go-work-ts-mode--font-lock-settings
+  (treesit-font-lock-rules
+   :language 'gowork
+   :feature 'bracket
+   '((["(" ")"]) @font-lock-bracket-face)
+
+   :language 'gowork
+   :feature 'comment
+   '((comment) @font-lock-comment-face)
+
+   :language 'gowork
+   :feature 'keyword
+   `([,@go-work-ts-mode--keywords] @font-lock-keyword-face)
+
+   :language 'gowork
+   :feature 'number
+   '([(go_version) (version)] @font-lock-number-face)
+
+   :language 'gowork
+   :feature 'operator
+   '((["=>"]) @font-lock-operator-face)
+
+   :language 'gowork
+   :feature 'error
+   :override t
+   '((ERROR) @font-lock-warning-face))
+  "Tree-sitter font-lock settings for `go-work-ts-mode'.")
+
+;;;###autoload
+(define-derived-mode go-work-ts-mode prog-mode "Go Work"
+  "Major mode for editing go.work files, powered by tree-sitter."
+  :group 'go
+
+  (when (treesit-ready-p 'gowork)
+    (setq treesit-primary-parser (treesit-parser-create 'gowork))
+
+    ;; Comments.
+    (setq-local comment-start "// ")
+    (setq-local comment-end "")
+    (setq-local comment-start-skip (rx "//" (* (syntax whitespace))))
+
+    ;; Indent.
+    (setq-local indent-tabs-mode t
+                treesit-simple-indent-rules go-work-ts-mode--indent-rules)
+
+    ;; Font-lock.
+    (setq-local treesit-font-lock-settings go-work-ts-mode--font-lock-settings)
+    (setq-local treesit-font-lock-feature-list
+                '((comment)
+                  (keyword)
+                  (number)
+                  (bracket error operator)))
+
+    (treesit-major-mode-setup)))
+
+;;;###autoload
+(add-to-list 'auto-mode-alist '("/go\\.work\\'" . go-work-ts-mode))
 
 (provide 'go-ts-mode)
 

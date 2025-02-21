@@ -1,6 +1,6 @@
 ;;; vc-rcs.el --- support for RCS version-control  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2025 Free Software Foundation, Inc.
 
 ;; Author: FSF (see vc.el for full credits)
 ;; Maintainer: emacs-devel@gnu.org
@@ -96,7 +96,7 @@ to use --brief and sets this variable to remember whether it worked."
 ;; for a registered backend without loading every backend.
 ;;;###autoload
 (defcustom vc-rcs-master-templates
-  (purecopy '("%sRCS/%s,v" "%s%s,v" "%sRCS/%s"))
+  '("%sRCS/%s,v" "%s%s,v" "%sRCS/%s")
   "Where to look for RCS master files.
 For a description of possible values, see `vc-check-master-templates'."
   :type '(choice (const :tag "Use standard RCS file names"

@@ -1,6 +1,6 @@
 ;;; ibuf-ext.el --- extensions for ibuffer  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Colin Walters <walters@verbum.org>
 ;; Maintainer: John Paul Wallington <jpw@gnu.org>
@@ -1872,8 +1872,7 @@ Otherwise buffers whose name matches an element of
 (defun ibuffer-mark-modified-buffers ()
   "Mark all modified buffers."
   (interactive)
-  (ibuffer-mark-on-buffer
-   (lambda (buf) (buffer-modified-p buf))))
+  (ibuffer-mark-on-buffer #'buffer-modified-p))
 
 ;;;###autoload
 (defun ibuffer-mark-unsaved-buffers ()

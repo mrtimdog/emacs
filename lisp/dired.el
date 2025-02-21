@@ -1,6 +1,6 @@
 ;;; dired.el --- directory-browsing commands -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1992-1997, 2000-2024 Free Software
+;; Copyright (C) 1985-1986, 1992-1997, 2000-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
@@ -60,7 +60,7 @@
   :group 'dired)
 
 ;;;###autoload
-(defcustom dired-listing-switches (purecopy "-al")
+(defcustom dired-listing-switches "-al"
   "Switches passed to `ls' for Dired.  MUST contain the `l' option.
 May contain all other options that don't contradict `-l';
 may contain even `F', `b', `i' and `s'.  See also the variable
@@ -980,46 +980,48 @@ marked file, return (t FILENAME) instead of (FILENAME)."
   ;;endless loop.
   ;;This warning should not apply any longer, sk  2-Sep-1991 14:10.
   `(prog1
-       (let ((inhibit-read-only t) case-fold-search found results)
-	 (if (and ,arg (not (eq ,arg 'marked)))
-	     (if (integerp ,arg)
-		 (progn	;; no save-excursion, want to move point.
-		   (dired-repeat-over-lines
-		    ,arg
-		    (lambda ()
-		      (if ,show-progress (sit-for 0))
-		      (setq results (cons ,body results))))
-		   (when (< ,arg 0)
-		     (setq results (nreverse results)))
-		   results)
-	       ;; non-nil, non-integer, non-marked ARG means use current file:
-               (list ,body))
-	   (let ((regexp (dired-marker-regexp)) next-position)
-	     (save-excursion
-	       (goto-char (point-min))
-	       ;; remember position of next marked file before BODY
-	       ;; can insert lines before the just found file,
-	       ;; confusing us by finding the same marked file again
-	       ;; and again and...
-	       (setq next-position (and (re-search-forward regexp nil t)
-					(point-marker))
-		     found (not (null next-position)))
-	       (while next-position
-		 (goto-char next-position)
-		 (if ,show-progress (sit-for 0))
-		 (setq results (cons ,body results))
-		 ;; move after last match
-		 (goto-char next-position)
-		 (forward-line 1)
-		 (set-marker next-position nil)
-		 (setq next-position (and (re-search-forward regexp nil t)
-					  (point-marker)))))
-	     (if (and ,distinguish-one-marked (= (length results) 1))
-		 (setq results (cons t results)))
-	     (if found
-		 results
-               (unless (eq ,arg 'marked)
-	         (list ,body))))))
+       (inhibit-auto-revert
+         (let ((inhibit-read-only t)
+               case-fold-search found results)
+	   (if (and ,arg (not (eq ,arg 'marked)))
+	       (if (integerp ,arg)
+		   (progn	;; no save-excursion, want to move point.
+		     (dired-repeat-over-lines
+		      ,arg
+		      (lambda ()
+		        (if ,show-progress (sit-for 0))
+		        (setq results (cons ,body results))))
+		     (when (< ,arg 0)
+		       (setq results (nreverse results)))
+		     results)
+	         ;; non-nil, non-integer, non-marked ARG means use current file:
+                 (list ,body))
+	     (let ((regexp (dired-marker-regexp)) next-position)
+	       (save-excursion
+	         (goto-char (point-min))
+	         ;; remember position of next marked file before BODY
+	         ;; can insert lines before the just found file,
+	         ;; confusing us by finding the same marked file again
+	         ;; and again and...
+	         (setq next-position (and (re-search-forward regexp nil t)
+					  (point-marker))
+		       found (not (null next-position)))
+	         (while next-position
+		   (goto-char next-position)
+		   (if ,show-progress (sit-for 0))
+		   (setq results (cons ,body results))
+		   ;; move after last match
+		   (goto-char next-position)
+		   (forward-line 1)
+		   (set-marker next-position nil)
+		   (setq next-position (and (re-search-forward regexp nil t)
+					    (point-marker)))))
+	       (if (and ,distinguish-one-marked (= (length results) 1))
+		   (setq results (cons t results)))
+	       (if found
+		   results
+                 (unless (eq ,arg 'marked)
+	           (list ,body)))))))
      ;; save-excursion loses, again
      (dired-move-to-filename)))
 
@@ -1962,13 +1964,12 @@ other marked file as well.  Otherwise, unmark all files."
                        ;; a remote file.
                        (user-error (cadr error)))))))))))
 
-(defvar dired-mouse-drag-files-map (let ((keymap (make-sparse-keymap)))
-                                     (define-key keymap [down-mouse-1] #'dired-mouse-drag)
-                                     (define-key keymap [C-down-mouse-1] #'dired-mouse-drag)
-                                     (define-key keymap [S-down-mouse-1] #'dired-mouse-drag)
-                                     (define-key keymap [M-down-mouse-1] #'dired-mouse-drag)
-                                     keymap)
-  "Keymap applied to file names when `dired-mouse-drag-files' is enabled.")
+(defvar-keymap dired-mouse-drag-files-map
+  :doc "Keymap applied to file names when `dired-mouse-drag-files' is enabled."
+  "<down-mouse-1>"   #'dired-mouse-drag
+  "C-<down-mouse-1>" #'dired-mouse-drag
+  "S-<down-mouse-1>" #'dired-mouse-drag
+  "M-<down-mouse-1>" #'dired-mouse-drag)
 
 (defvar dired-click-to-select-mode)
 (defvar dired-click-to-select-map)
@@ -2082,7 +2083,18 @@ mouse-2: visit this file in other window"
                           "<mouse-2>" click
                           "<follow-link>" 'mouse-face
                           "RET" click))))
-          (setq segment-start (point)))))))
+          (setq segment-start (point)))
+        (when (search-forward ":" bound t)
+          (add-text-properties
+           segment-start (1- (point))
+           `(mouse-face highlight
+             help-echo "mouse-1: re-read this buffer's directory"
+             keymap ,(define-keymap
+                       "<mouse-2>" (lambda ()
+                                     (interactive "@")
+                                     (revert-buffer))
+                       "<follow-link>" 'mouse-face
+                       "RET" #'revert-buffer))))))))
 
 (defun dired--get-ellipsis-length ()
   "Return length of ellipsis."
@@ -2149,7 +2161,8 @@ ARG and NOCONFIRM, passed from `revert-buffer', are ignored."
 	(if (dired-goto-subdir dir)
 	    (dired-hide-subdir 1))))
     (unless modflag (restore-buffer-modified-p nil))
-    (hack-dir-local-variables-non-file-buffer))
+    (hack-dir-local-variables-non-file-buffer)
+    (dired--align-all-files))
   ;; outside of the let scope
 ;;;  Might as well not override the user if the user changed this.
 ;;;  (setq buffer-read-only t)
@@ -2838,7 +2851,9 @@ Keybindings:
   ;; FIXME this should check the key-bindings and use
   ;; substitute-command-keys if non-standard
   (message
-   "d-elete, u-ndelete, x-punge, f-ind, o-ther window, R-ename, C-opy, h-elp"))
+   (substitute-command-keys
+    (concat "\\`d'-elete, \\`u'-ndelete, \\`x'-punge, \\`f'-ind, "
+            "\\`o'-ther window, \\`R'-ename, \\`C'-opy, \\`h'-elp"))))
 
 (defun dired-undo ()
   "Undo in a Dired buffer.
@@ -2899,7 +2914,7 @@ is controlled by `dired-movement-style'."
                         (dired-move-to-filename)
                         (point)))
         ;; Up/Down indicates the direction.
-        (moving-down (if (cl-plusp arg)
+        (moving-down (if (plusp arg)
                          1              ; means Down.
                        -1)))            ; means Up.
     ;; Line by line in case we forget to skip empty lines.
@@ -2915,7 +2930,7 @@ is controlled by `dired-movement-style'."
           ;; means infinite loop with no files found.
           (if (and wrapped (eq old-arg arg))
               (setq arg 0)
-            (goto-char (if (cl-plusp moving-down)
+            (goto-char (if (plusp moving-down)
                            (point-min)
                          (point-max))))
           (setq wrapped t))
@@ -4065,27 +4080,26 @@ non-empty directories is allowed."
 	    (while l
 	      (goto-char (marker-position (cdr (car l))))
               (dired-move-to-filename)
-	      (let ((inhibit-read-only t))
-		(condition-case err
-		    (let ((fn (car (car l)))
-                          ;; Temporarily prevent auto-revert while
-                          ;; deleting entry in the dired buffer
-                          ;; (bug#71264).
-                          (auto-revert-mode nil))
-		      (dired-delete-file fn dired-recursive-deletes trash)
-		      ;; if we get here, removing worked
-		      (setq succ (1+ succ))
-		      (progress-reporter-update progress-reporter succ)
-		      (dired-fun-in-all-buffers
-		       (file-name-directory fn) (file-name-nondirectory fn)
-		       #'dired-delete-entry fn)
-                      ;; For when FN's directory name is different
-                      ;; from the current buffer's dired-directory.
-                      (dired-delete-entry fn))
-                  (quit (throw '--delete-cancel (message "OK, canceled")))
-		  (error ;; catch errors from failed deletions
-		   (dired-log "%s: %s\n" (car err) (error-message-string err))
-		   (setq failures (cons (car (car l)) failures)))))
+              ;; Temporarily prevent auto-revert while deleting entry in
+              ;; the dired buffer (bug#71264).
+              (inhibit-auto-revert
+	        (let ((inhibit-read-only t))
+		  (condition-case err
+		      (let ((fn (car (car l))))
+		        (dired-delete-file fn dired-recursive-deletes trash)
+		        ;; if we get here, removing worked
+		        (setq succ (1+ succ))
+		        (progress-reporter-update progress-reporter succ)
+		        (dired-fun-in-all-buffers
+		         (file-name-directory fn) (file-name-nondirectory fn)
+		         #'dired-delete-entry fn)
+                        ;; For when FN's directory name is different
+                        ;; from the current buffer's dired-directory.
+                        (dired-delete-entry fn))
+                    (quit (throw '--delete-cancel (message "OK, canceled")))
+		    (error ;; catch errors from failed deletions
+		     (dired-log "%s: %s\n" (car err) (error-message-string err))
+		     (setq failures (cons (car (car l)) failures))))))
 	      (setq l (cdr l)))
 	    (if (not failures)
 		(progress-reporter-done progress-reporter)
@@ -5256,6 +5270,7 @@ Interactively with prefix argument, read FILE-NAME."
 (declare-function Man-getpage-in-background "man" (topic))
 (defvar Man-support-remote-systems) ; from man.el
 (defvar manual-program) ; from man.el
+(declare-function tool-bar--image-expression "tool-bar" (icon))
 
 (defun dired-do-man ()
   "In Dired, run `man' on this file."
@@ -5281,8 +5296,8 @@ Interactively with prefix argument, read FILE-NAME."
 
 ;;; Click-To-Select mode
 
-(defvar dired-click-to-select-map (make-sparse-keymap)
-  "Keymap placed on files under `dired-click-to-select' mode.")
+(defvar-keymap dired-click-to-select-map
+  :doc "Keymap placed on files under `dired-click-to-select' mode.")
 
 (define-key dired-click-to-select-map [mouse-2]
             #'dired-mark-for-click)

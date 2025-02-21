@@ -1,6 +1,6 @@
 ;;; emacs-news-mode.el --- major mode to edit and view the NEWS file -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Keywords: tools
 
@@ -260,7 +260,7 @@ untagged NEWS entry."
         (while (re-search-forward "\"\\(([a-z0-9-]+)[ \n][^\"]\\{1,80\\}\\)\""
                                   nil t)
           (buttonize-region (match-beginning 1) (match-end 1)
-                            (lambda (node) (info node))
+                            #'info
                             (match-string 1)))))))
 
 (defun emacs-news--sections (regexp)

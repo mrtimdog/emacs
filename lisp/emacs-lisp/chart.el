@@ -1,6 +1,6 @@
 ;;; chart.el --- Draw charts (bar charts, etc)  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1996-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Old-Version: 0.2
@@ -347,7 +347,7 @@ of the drawing."
 	 (odd nil)
 	 p1)
     (while s
-      (setq odd (= (% (length s) 2) 1))
+      (setq odd (oddp (length s)))
       (setq r (chart-translate-namezone (oref a chart) i))
       (if (eq dir 'vertical)
 	  (setq p (/ (+ (car r) (cdr r)) 2))

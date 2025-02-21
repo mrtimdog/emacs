@@ -1,6 +1,6 @@
 ;;; zone.el --- idle display hacks  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Victor Zandy <zandy@cs.wisc.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -454,7 +454,7 @@ run a specific program.  The program must be a member of
     (dotimes (i 20)
       (goto-char pos)
       (delete-char 1)
-      (insert (if (= 0 (% i 2)) hmm c-string))
+      (insert (if (evenp i) hmm c-string))
       (zone-park/sit-for wbeg (setq wait (* wait 0.8))))
     (delete-char -1) (insert c-string)))
 

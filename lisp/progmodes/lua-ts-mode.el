@@ -1,6 +1,6 @@
 ;;; lua-ts-mode.el --- Major mode for editing Lua files -*- lexical-binding: t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Author: John Muhl <jm@pub.pink>
 ;; Created: June 27, 2023
@@ -21,6 +21,15 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
+;;; Tree-sitter language versions
+;;
+;; lua-ts-mode is known to work with the following languages and version:
+;; - tree-sitter-lua: v0.2.0-2-g34e60e7
+;;
+;; We try our best to make builtin modes work with latest grammar
+;; versions, so a more recent grammar version has a good chance to work.
+;; Send us a bug report if it doesn't.
+
 ;;; Commentary:
 
 ;; This package provides `lua-ts-mode' which is a major mode for Lua
@@ -33,22 +42,10 @@
 
 (require 'comint)
 (require 'treesit)
+(treesit-declare-unavailable-functions)
 
 (eval-when-compile
   (require 'rx))
-
-(declare-function treesit-induce-sparse-tree "treesit.c")
-(declare-function treesit-node-child-by-field-name "treesit.c")
-(declare-function treesit-node-child-count "treesit.c")
-(declare-function treesit-node-eq "treesit.c")
-(declare-function treesit-node-first-child-for-pos "treesit.c")
-(declare-function treesit-node-parent "treesit.c")
-(declare-function treesit-node-prev-sibling "treesit.c")
-(declare-function treesit-node-start "treesit.c")
-(declare-function treesit-node-end "treesit.c")
-(declare-function treesit-node-type "treesit.c")
-(declare-function treesit-parser-create "treesit.c")
-(declare-function treesit-search-subtree "treesit.c")
 
 (defgroup lua-ts nil
   "Major mode for editing Lua files."
@@ -165,11 +162,11 @@ values of OVERRIDE."
                (string-match "\\`--" node-text))
       (treesit-fontify-with-override node-start
                                      delimiter-end
-                                     font-lock-comment-delimiter-face
+                                     'font-lock-comment-delimiter-face
                                      override))
     (treesit-fontify-with-override (max delimiter-end start)
                                    (min node-end end)
-                                   font-lock-comment-face
+                                   'font-lock-comment-face
                                    override)))
 
 (defvar lua-ts--font-lock-settings
@@ -293,7 +290,7 @@ values of OVERRIDE."
           lua-ts--multi-line-comment-start
           (parent-is "comment_content")
           (parent-is "string_content")
-          (node-is "]]"))
+          (or (node-is "]]") (node-is "comment_end")))
       no-indent 0)
      ((and (n-p-gp "field" "table_constructor" "arguments")
            lua-ts--multi-arg-function-call-matcher
@@ -694,7 +691,7 @@ Calls REPORT-FN directly."
 
 (defun lua-ts-send-file (file)
   "Send contents of FILE to the inferior Lua process."
-  (interactive "f" lua-ts-mode)
+  (interactive "f")
   (with-temp-buffer
     (insert-file-contents-literally file)
     (lua-ts-send-region (point-min) (point-max))))
@@ -851,7 +848,8 @@ Calls REPORT-FN directly."
 (derived-mode-add-parents 'lua-ts-mode '(lua-mode))
 
 (when (treesit-ready-p 'lua)
-  (add-to-list 'auto-mode-alist '("\\.lua\\'" . lua-ts-mode)))
+  (add-to-list 'auto-mode-alist '("\\.lua\\'" . lua-ts-mode))
+  (add-to-list 'interpreter-mode-alist '("\\<lua\\(?:jit\\)?" . lua-ts-mode)))
 
 (provide 'lua-ts-mode)
 

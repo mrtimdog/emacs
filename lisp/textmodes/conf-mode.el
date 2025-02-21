@@ -1,6 +1,6 @@
 ;;; conf-mode.el --- Simple major mode for editing conf/ini/properties files  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2025 Free Software Foundation, Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>
 ;; Keywords: conf ini windows java
@@ -62,23 +62,21 @@ not align (only setting space according to `conf-assignment-space')."
   "Value for `conf-assignment-space' in colon style Conf mode buffers."
   :type 'boolean)
 
-(defvar conf-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "\C-c\C-u" 'conf-unix-mode)
-    (define-key map "\C-c\C-w" 'conf-windows-mode)
-    (define-key map "\C-c\C-j" 'conf-javaprop-mode)
-    (define-key map "\C-c\C-s" 'conf-space-keywords)
-    (define-key map "\C-c " 'conf-space-keywords)
-    (define-key map "\C-c\C-c" 'conf-colon-mode)
-    (define-key map "\C-c:" 'conf-colon-mode)
-    (define-key map "\C-c\C-x" 'conf-xdefaults-mode)
-    (define-key map "\C-c\C-p" 'conf-ppd-mode)
-    (define-key map "\C-c\C-q" 'conf-quote-normal)
-    (define-key map "\C-c\"" 'conf-quote-normal)
-    (define-key map "\C-c'" 'conf-quote-normal)
-    (define-key map "\C-c\C-a" 'conf-align-assignments)
-    map)
-  "Local keymap for `conf-mode' buffers.")
+(defvar-keymap conf-mode-map
+  :doc "Local keymap for `conf-mode' buffers."
+  "C-c C-u" #'conf-unix-mode
+  "C-c C-w" #'conf-windows-mode
+  "C-c C-j" #'conf-javaprop-mode
+  "C-c C-s" #'conf-space-keywords
+  "C-c SPC" #'conf-space-keywords
+  "C-c C-c" #'conf-colon-mode
+  "C-c :"   #'conf-colon-mode
+  "C-c C-x" #'conf-xdefaults-mode
+  "C-c C-p" #'conf-ppd-mode
+  "C-c C-q" #'conf-quote-normal
+  "C-c \""  #'conf-quote-normal
+  "C-c '"   #'conf-quote-normal
+  "C-c C-a" #'conf-align-assignments)
 
 (easy-menu-define conf-mode-menu conf-mode-map
   "Menu for `conf-mode'."

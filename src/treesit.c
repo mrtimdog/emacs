@@ -1,6 +1,6 @@
 /* Tree-sitter integration for GNU Emacs.
 
-Copyright (C) 2021-2024 Free Software Foundation, Inc.
+Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 Maintainer: Yuan Fu <casouri@gmail.com>
 
@@ -563,6 +563,17 @@ treesit_symbol_to_c_name (char *symbol_name)
     }
 }
 
+/* Resolve language symbol LANG according to
+   treesit-language-remap-alist.  */
+static
+Lisp_Object resolve_language_symbol (Lisp_Object lang)
+{
+  Lisp_Object res = Fassoc (lang, Vtreesit_language_remap_alist, Qeq);
+  if (NILP (res))
+    return lang;
+  return Fcdr (res);
+}
+
 /* Find the override name for LANGUAGE_SYMBOL in
    treesit-load-name-override-list.  Set NAME and C_SYMBOL to the
    override name, and return true if there exists one, otherwise
@@ -651,7 +662,7 @@ treesit_load_language (Lisp_Object language_symbol,
 
   /* Override the library name and C name, if appropriate.  */
   Lisp_Object override_name;
-  Lisp_Object override_c_name;
+  Lisp_Object override_c_name UNINIT;
   bool found_override = treesit_find_override_name (language_symbol,
 						    &override_name,
 						    &override_c_name);
@@ -1489,10 +1500,20 @@ treesit_ensure_query_compiled (Lisp_Object query, Lisp_Object *signal_symbol,
   /* Get query source and TSLanguage ready.  */
   Lisp_Object source = XTS_COMPILED_QUERY (query)->source;
   Lisp_Object language = XTS_COMPILED_QUERY (query)->language;
+
+  Lisp_Object remapped_lang = resolve_language_symbol (language);
+  if (!SYMBOLP (remapped_lang))
+    {
+      *signal_symbol = Qtreesit_query_error;
+      *signal_data = list2 (build_string ("Invalid language symbol"),
+			    remapped_lang);
+      return NULL;
+    }
+
   /* This is the main reason why we compile query lazily: to avoid
      loading languages early.  */
   struct treesit_loaded_lang lang
-    = treesit_load_language (language, signal_symbol, signal_data);
+    = treesit_load_language (remapped_lang, signal_symbol, signal_data);
   TSLanguage *treesit_lang = lang.lang;
   if (treesit_lang == NULL)
     return NULL;
@@ -1516,15 +1537,18 @@ treesit_ensure_query_compiled (Lisp_Object query, Lisp_Object *signal_symbol,
   return treesit_query;
 }
 
-/* Resolve language symbol LANG according to
-   treesit-language-remap-alist.  */
+/* Bsically treesit_ensure_query_compiled but can signal.  */
 static
-Lisp_Object resolve_language_symbol (Lisp_Object lang)
+void treesit_ensure_query_compiled_signal (Lisp_Object lisp_query)
 {
-  Lisp_Object res = Fassoc (lang, Vtreesit_language_remap_alist, Qeq);
-  if (NILP (res))
-    return lang;
-  return Fcdr (res);
+  Lisp_Object signal_symbol = Qnil;
+  Lisp_Object signal_data = Qnil;
+  TSQuery *treesit_query = treesit_ensure_query_compiled (lisp_query,
+							  &signal_symbol,
+							  &signal_data);
+
+  if (treesit_query == NULL)
+    xsignal (signal_symbol, signal_data);
 }
 
 
@@ -1643,8 +1667,8 @@ an indirect buffer.  */)
 
   treesit_check_buffer_size (buf);
 
-  language = resolve_language_symbol (language);
-  CHECK_SYMBOL (language);
+  Lisp_Object remapped_lang = resolve_language_symbol (language);
+  CHECK_SYMBOL (remapped_lang);
 
   /* See if we can reuse a parser.  */
   if (NILP (no_reuse))
@@ -1665,7 +1689,7 @@ an indirect buffer.  */)
   Lisp_Object signal_data = Qnil;
   TSParser *parser = ts_parser_new ();
   struct treesit_loaded_lang loaded_lang
-    = treesit_load_language (language, &signal_symbol, &signal_data);
+    = treesit_load_language (remapped_lang, &signal_symbol, &signal_data);
   TSLanguage *lang = loaded_lang.lang;
   if (lang == NULL)
     xsignal (signal_symbol, signal_data);
@@ -1673,7 +1697,10 @@ an indirect buffer.  */)
      always succeed.  */
   ts_parser_set_language (parser, lang);
 
-  /* Create parser.  */
+  /* Create parser.  Use the unmapped LANGUAGE symbol, so the nodes
+     created by this parser (and the parser itself) identify themselves
+     as the unmapped language.  This makes the grammar mapping
+     completely transparent.  */
   Lisp_Object lisp_parser = make_treesit_parser (buf_orig,
 						 parser, NULL,
 						 language, tag);
@@ -1736,8 +1763,6 @@ tag.  */)
 
   if (buf->base_buffer)
     buf = buf->base_buffer;
-
-  language = resolve_language_symbol (language);
 
   /* Return a fresh list so messing with that list doesn't affect our
      internal data.  */
@@ -1932,7 +1957,10 @@ which the parser should operate.  Regions must not overlap, and the
 regions should come in order in the list.  Signal
 `treesit-set-range-error' if the argument is invalid, or something
 else went wrong.  If RANGES is nil, the PARSER is to parse the whole
-buffer.  */)
+buffer.
+
+DO NOT modify RANGES after passing it to this function, as RANGES is
+saved to PARSER internally.  */)
   (Lisp_Object parser, Lisp_Object ranges)
 {
   treesit_check_parser (parser);
@@ -3051,6 +3079,8 @@ DEFUN ("treesit-query-compile",
        doc: /* Compile QUERY to a compiled query.
 
 Querying with a compiled query is much faster than an uncompiled one.
+So it's a good idea to use compiled query in tight loops, etc.
+
 LANGUAGE is the language this query is for.
 
 If EAGER is non-nil, immediately load LANGUAGE and compile the query.
@@ -3064,11 +3094,20 @@ You can use `treesit-query-validate' to validate and debug a query.  */)
   if (NILP (Ftreesit_query_p (query)))
     wrong_type_argument (Qtreesit_query_p, query);
   CHECK_SYMBOL (language);
-  if (TS_COMPILED_QUERY_P (query))
-    return query;
 
   treesit_initialize ();
 
+  if (TS_COMPILED_QUERY_P (query))
+    {
+      if (NILP (eager))
+	return query;
+      treesit_ensure_query_compiled_signal (query);
+      return query;
+    }
+
+  /* We don't map language here, instead, we remap language when
+     actually compiling the query.  This way the query appears to have
+     the unmapped language to the Lisp world.  */
   Lisp_Object lisp_query = make_treesit_query (query, language);
 
   /* Maybe actually compile.  */
@@ -3076,15 +3115,7 @@ You can use `treesit-query-validate' to validate and debug a query.  */)
     return lisp_query;
   else
     {
-      Lisp_Object signal_symbol = Qnil;
-      Lisp_Object signal_data = Qnil;
-      TSQuery *treesit_query = treesit_ensure_query_compiled (lisp_query,
-							      &signal_symbol,
-							      &signal_data);
-
-      if (treesit_query == NULL)
-	xsignal (signal_symbol, signal_data);
-
+      treesit_ensure_query_compiled_signal (lisp_query);
       return lisp_query;
     }
 }
@@ -3604,10 +3635,14 @@ treesit_traverse_validate_predicate (Lisp_Object pred,
     }
   if (STRINGP (pred))
     return true;
-  else if (FUNCTIONP (pred))
+  else if (FUNCTIONP (pred)
+	   && !(SYMBOLP (pred) && !NILP (Fget (pred, Qtreesit_thing_symbol))))
     return true;
   else if (SYMBOLP (pred))
     {
+      if (BASE_EQ (pred, Qnamed) || BASE_EQ (pred, Qanonymous))
+	return true;
+
       Lisp_Object definition = treesit_traverse_get_predicate (pred,
 							       language);
       if (NILP (definition))
@@ -3652,13 +3687,13 @@ treesit_traverse_validate_predicate (Lisp_Object pred,
 						      signal_data,
 						      recursion_level + 1);
 	}
-      else if (BASE_EQ (car, Qor))
+      else if (BASE_EQ (car, Qor) || BASE_EQ (car, Qand))
 	{
 	  if (!CONSP (cdr) || NILP (cdr))
 	    {
 	      *signal_data = list3 (Qtreesit_invalid_predicate,
-				    build_string ("`or' must have a list "
-						  "of patterns as "
+				    build_string ("`or' or `and' must have "
+						  "a list of patterns as "
 						  "arguments "),
 				    pred);
 	      return false;
@@ -3708,11 +3743,16 @@ treesit_traverse_match_predicate (TSTreeCursor *cursor, Lisp_Object pred,
       const char *type = ts_node_type (node);
       return fast_c_string_match (pred, type, strlen (type)) >= 0;
     }
-  else if (FUNCTIONP (pred))
+  else if (FUNCTIONP (pred)
+	   && !(SYMBOLP (pred) && !NILP (Fget (pred, Qtreesit_thing_symbol))))
     {
       Lisp_Object lisp_node = make_treesit_node (parser, node);
-      return !NILP (CALLN (Ffuncall, pred, lisp_node));
+      return !NILP (calln (pred, lisp_node));
     }
+  else if (SYMBOLP (pred) && BASE_EQ (pred, Qnamed))
+    return ts_node_is_named (node);
+  else if (SYMBOLP (pred) && BASE_EQ (pred, Qanonymous))
+    return !ts_node_is_named (node);
   else if (SYMBOLP (pred))
     {
       Lisp_Object language = XTS_PARSER (parser)->language_symbol;
@@ -3739,6 +3779,16 @@ treesit_traverse_match_predicate (TSTreeCursor *cursor, Lisp_Object pred,
 	    }
 	  return false;
 	}
+      else if (BASE_EQ (car, Qand))
+	{
+	  FOR_EACH_TAIL (cdr)
+	    {
+	      if (!treesit_traverse_match_predicate (cursor, XCAR (cdr),
+						     parser, named))
+		return false;
+	    }
+	  return  true;
+	}
       else if (STRINGP (car) && FUNCTIONP (cdr))
 	{
 	  /* A bit of code duplication here, but should be fine.  */
@@ -3747,7 +3797,7 @@ treesit_traverse_match_predicate (TSTreeCursor *cursor, Lisp_Object pred,
 	    return false;
 
 	  Lisp_Object lisp_node = make_treesit_node (parser, node);
-	  if (NILP (CALLN (Ffuncall, cdr, lisp_node)))
+	  if (NILP (calln (cdr, lisp_node)))
 	    return false;
 
 	  return true;
@@ -4016,7 +4066,7 @@ treesit_build_sparse_tree (TSTreeCursor *cursor, Lisp_Object parent,
       TSNode node = ts_tree_cursor_current_node (cursor);
       Lisp_Object lisp_node = make_treesit_node (parser, node);
       if (!NILP (process_fn))
-	lisp_node = CALLN (Ffuncall, process_fn, lisp_node);
+	lisp_node = calln (process_fn, lisp_node);
 
       Lisp_Object this = Fcons (lisp_node, Qnil);
       Fsetcdr (parent, Fcons (this, Fcdr (parent)));
@@ -4281,6 +4331,7 @@ syms_of_treesit (void)
   DEFSYM (Qtreesit_compiled_query_p, "treesit-compiled-query-p");
   DEFSYM (Qtreesit_query_p, "treesit-query-p");
   DEFSYM (Qnamed, "named");
+  DEFSYM (Qanonymous, "anonymous");
   DEFSYM (Qmissing, "missing");
   DEFSYM (Qextra, "extra");
   DEFSYM (Qoutdated, "outdated");
@@ -4319,7 +4370,10 @@ syms_of_treesit (void)
   DEFSYM (Qtreesit_invalid_predicate, "treesit-invalid-predicate");
   DEFSYM (Qtreesit_predicate_not_found, "treesit-predicate-not-found");
 
+  DEFSYM (Qtreesit_thing_symbol, "treesit-thing-symbol");
+
   DEFSYM (Qor, "or");
+  DEFSYM (Qand, "and");
 
 #ifdef WINDOWSNT
   DEFSYM (Qtree_sitter, "tree-sitter");
@@ -4402,8 +4456,12 @@ cons (REGEXP . FN), which is a combination of a regexp and a predicate
 function, and the node has to match both to qualify as the thing.
 
 PRED can also be recursively defined.  It can be (or PRED...), meaning
-satisfying anyone of the inner PREDs qualifies the node; or (not
-PRED), meaning not satisfying the inner PRED qualifies the node.
+satisfying anyone of the inner PREDs qualifies the node; or (and
+PRED...) meaning satisfying all of the inner PREDs qualifies the node;
+or (not PRED), meaning not satisfying the inner PRED qualifies the node.
+
+There are two pre-defined predicates, `named' and `anonymous`.  They
+match named nodes and anonymous nodes, respectively.
 
 Finally, PRED can refer to other THINGs defined in this list by using
 the symbol of that THING.  For example, (or sexp sentence).  */);
@@ -4423,43 +4481,43 @@ applies to LANGUAGE-A will be redirected to LANGUAGE-B instead.  */);
   Fmake_variable_buffer_local (Qtreesit_language_remap_alist);
 
   staticpro (&Vtreesit_str_libtree_sitter);
-  Vtreesit_str_libtree_sitter = build_pure_c_string ("libtree-sitter-");
+  Vtreesit_str_libtree_sitter = build_string ("libtree-sitter-");
   staticpro (&Vtreesit_str_tree_sitter);
-  Vtreesit_str_tree_sitter = build_pure_c_string ("tree-sitter-");
+  Vtreesit_str_tree_sitter = build_string ("tree-sitter-");
 #ifndef WINDOWSNT
   staticpro (&Vtreesit_str_dot_0);
-  Vtreesit_str_dot_0 = build_pure_c_string (".0");
+  Vtreesit_str_dot_0 = build_string (".0");
 #endif
   staticpro (&Vtreesit_str_dot);
-  Vtreesit_str_dot = build_pure_c_string (".");
+  Vtreesit_str_dot = build_string (".");
   staticpro (&Vtreesit_str_question_mark);
-  Vtreesit_str_question_mark = build_pure_c_string ("?");
+  Vtreesit_str_question_mark = build_string ("?");
   staticpro (&Vtreesit_str_star);
-  Vtreesit_str_star = build_pure_c_string ("*");
+  Vtreesit_str_star = build_string ("*");
   staticpro (&Vtreesit_str_plus);
-  Vtreesit_str_plus = build_pure_c_string ("+");
+  Vtreesit_str_plus = build_string ("+");
   staticpro (&Vtreesit_str_pound_equal);
-  Vtreesit_str_pound_equal = build_pure_c_string ("#equal");
+  Vtreesit_str_pound_equal = build_string ("#equal");
   staticpro (&Vtreesit_str_pound_match);
-  Vtreesit_str_pound_match = build_pure_c_string ("#match");
+  Vtreesit_str_pound_match = build_string ("#match");
   staticpro (&Vtreesit_str_pound_pred);
-  Vtreesit_str_pound_pred = build_pure_c_string ("#pred");
+  Vtreesit_str_pound_pred = build_string ("#pred");
   staticpro (&Vtreesit_str_open_bracket);
-  Vtreesit_str_open_bracket = build_pure_c_string ("[");
+  Vtreesit_str_open_bracket = build_string ("[");
   staticpro (&Vtreesit_str_close_bracket);
-  Vtreesit_str_close_bracket = build_pure_c_string ("]");
+  Vtreesit_str_close_bracket = build_string ("]");
   staticpro (&Vtreesit_str_open_paren);
-  Vtreesit_str_open_paren = build_pure_c_string ("(");
+  Vtreesit_str_open_paren = build_string ("(");
   staticpro (&Vtreesit_str_close_paren);
-  Vtreesit_str_close_paren = build_pure_c_string (")");
+  Vtreesit_str_close_paren = build_string (")");
   staticpro (&Vtreesit_str_space);
-  Vtreesit_str_space = build_pure_c_string (" ");
+  Vtreesit_str_space = build_string (" ");
   staticpro (&Vtreesit_str_equal);
-  Vtreesit_str_equal = build_pure_c_string ("equal");
+  Vtreesit_str_equal = build_string ("equal");
   staticpro (&Vtreesit_str_match);
-  Vtreesit_str_match = build_pure_c_string ("match");
+  Vtreesit_str_match = build_string ("match");
   staticpro (&Vtreesit_str_pred);
-  Vtreesit_str_pred = build_pure_c_string ("pred");
+  Vtreesit_str_pred = build_string ("pred");
 
   defsubr (&Streesit_language_available_p);
   defsubr (&Streesit_library_abi_version);
@@ -4519,7 +4577,7 @@ applies to LANGUAGE-A will be redirected to LANGUAGE-B instead.  */);
   defsubr (&Streesit_subtree_stat);
 #endif /* HAVE_TREE_SITTER */
   defsubr (&Streesit_available_p);
-#ifdef WINDOWSNT
+#ifdef HAVE_NTGUI
   DEFSYM (Qtree_sitter__library_abi, "tree-sitter--library-abi");
   Fset (Qtree_sitter__library_abi,
 #if HAVE_TREE_SITTER

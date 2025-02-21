@@ -1,6 +1,6 @@
 ;;; term.el --- general command interpreter in a window stuff -*- lexical-binding: t -*-
 
-;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2024 Free Software
+;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Per Bothner <per@bothner.com>
@@ -2181,7 +2181,7 @@ A useful command to bind to SPC.  See `term-replace-by-expanded-history'."
 Quotes are single and double."
   (let ((countsq (term-how-many-region "\\(^\\|[^\\]\\)'" beg end))
 	(countdq (term-how-many-region "\\(^\\|[^\\]\\)\"" beg end)))
-    (or (= (mod countsq 2) 1) (= (mod countdq 2) 1))))
+    (or (oddp countsq) (oddp countdq))))
 
 (defun term-how-many-region (regexp beg end)
   "Return number of matches for REGEXP from BEG to END."
@@ -3015,8 +3015,8 @@ See `term-prompt-regexp'."
 
 (defconst term-control-seq-regexp
   (concat
-   ;; A control character,
-   "\\(?:[\r\n\000\007\t\b\016\017]\\|"
+   ;; A control character not matched in a longer sequence below,
+   "\\(?:[\x00-\x19\x1C-\x1F]\\|"
    ;; some Emacs specific control sequences, implemented by
    ;; `term-command-hook',
    "\032[^\n]+\n\\|"
@@ -3271,8 +3271,9 @@ See `term-prompt-regexp'."
                      (?A ;; An \eAnSiT sequence (Emacs specific).
                       (term-handle-ansi-terminal-messages
                        (substring str i ctl-end)))))
-                  ;; Ignore NUL, Shift Out, Shift In.
-                  ((or ?\0 #xE #xF 'nil) nil))
+                  ;; Ignore any control character not already recognized.
+                  ((or 'nil
+                       (and (pred characterp) (pred (lambda (c) (<= c ?\x1F))))) nil))
                 ;; Leave line-wrapping state if point was moved.
                 (unless (eq term-do-line-wrapping (point))
                   (setq term-do-line-wrapping nil))

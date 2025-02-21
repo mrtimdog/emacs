@@ -1,7 +1,7 @@
 ;;; eieio.el --- Enhanced Implementation of Emacs Interpreted Objects  -*- lexical-binding:t -*-
 ;;;              or maybe Eric's Implementation of Emacs Interpreted Objects
 
-;; Copyright (C) 1995-1996, 1998-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1996, 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Version: 1.4
@@ -58,6 +58,7 @@
 
 ;;; Defining a new class
 ;;
+;;;###autoload
 (defmacro defclass (name superclasses slots &rest options-and-doc)
   "Define NAME as a new class derived from SUPERCLASS with SLOTS.
 OPTIONS-AND-DOC is used as the class' options and base documentation.
@@ -114,10 +115,10 @@ and reference them using the function `class-option'."
   (cl-check-type superclasses list)
 
   (cond ((and (stringp (car options-and-doc))
-              (/= 1 (% (length options-and-doc) 2)))
+              (evenp (length options-and-doc)))
          (error "Too many arguments to `defclass'"))
         ((and (symbolp (car options-and-doc))
-              (/= 0 (% (length options-and-doc) 2)))
+              (oddp (length options-and-doc)))
          (error "Too many arguments to `defclass'")))
 
   (if (stringp (car options-and-doc))

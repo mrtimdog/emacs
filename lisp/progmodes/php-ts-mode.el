@@ -1,6 +1,6 @@
 ;;; php-ts-mode.el --- Major mode for editing PHP files using tree-sitter -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024 Free Software Foundation, Inc.
+;; Copyright (C) 2024-2025 Free Software Foundation, Inc.
 
 ;; Author: Vincenzo Pupillo <v.pupillo@gmail.com>
 ;; Maintainer: Vincenzo Pupillo <v.pupillo@gmail.com>
@@ -21,6 +21,20 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Tree-sitter language versions
+;;
+;; php-ts-mode is known to work with the following languages and version:
+;; - tree-sitter-phpdoc: fe3202e468bc17332bec8969f2b50ff1f1da3a46
+;; - tree-sitter-css: v0.23.1-1-g6a442a3
+;; - tree-sitter-jsdoc: v0.23.2
+;; - tree-sitter-javascript: v0.23.1-2-g108b2d4
+;; - tree-sitter-html: v0.23.2-1-gd9219ad
+;; - tree-sitter-php: v0.23.11
+;;
+;; We try our best to make builtin modes work with latest grammar
+;; versions, so a more recent grammar version has a good chance to work.
+;; Send us a bug report if it doesn't.
 
 ;;; Commentary:
 ;;
@@ -58,29 +72,12 @@
 (require 'css-mode) ;; for embed css into html
 (require 'js) ;; for embed javascript into html
 (require 'comint)
+(treesit-declare-unavailable-functions)
 
 (eval-when-compile
   (require 'cl-lib)
   (require 'rx)
   (require 'subr-x))
-
-(declare-function treesit-node-child "treesit.c")
-(declare-function treesit-node-child-by-field-name "treesit.c")
-(declare-function treesit-node-end "treesit.c")
-(declare-function treesit-node-parent "treesit.c")
-(declare-function treesit-node-start "treesit.c")
-(declare-function treesit-node-string "treesit.c")
-(declare-function treesit-node-type "treesit.c")
-(declare-function treesit-parser-add-notifier "treesit.c")
-(declare-function treesit-parser-buffer "treesit.c")
-(declare-function treesit-parser-create "treesit.c")
-(declare-function treesit-parser-included-ranges "treesit.c")
-(declare-function treesit-parser-list "treesit.c")
-(declare-function treesit-parser-language "treesit.c")
-(declare-function treesit-query-compile "treesit.c")
-(declare-function treesit-search-forward "treesit.c")
-(declare-function treesit-node-prev-sibling "treesit.c")
-(declare-function treesit-node-first-child-for-pos "treesit.c")
 
 ;;; Install treesitter language parsers
 (defvar php-ts-mode--language-source-alist
@@ -1557,7 +1554,6 @@ Depends on `c-ts-common-comment-setup'."
 
     ;; should be the last one
     (setq-local treesit-primary-parser (treesit-parser-create 'php))
-    (treesit-font-lock-recompute-features)
     (treesit-major-mode-setup)
     (add-hook 'flymake-diagnostic-functions #'php-ts-mode-flymake-php nil 'local)))
 

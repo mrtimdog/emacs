@@ -1,6 +1,6 @@
 ;;; gnus-cache.el --- cache interface for Gnus  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1995-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -502,7 +502,7 @@ Returns the list of articles removed."
 	(file-name-coding-system nnmail-pathname-coding-system))
     (when (file-exists-p dir)
       (setq articles
-	    (sort (mapcar (lambda (name) (string-to-number name))
+            (sort (mapcar #'string-to-number
 			  (directory-files dir nil "\\`[0-9]+\\'" t))
 		  #'<))
       ;; Update the cache active file, just to synch more.

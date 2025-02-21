@@ -1,6 +1,6 @@
 ;;; rmc.el --- read from a multiple choice question -*- lexical-binding: t -*-
 
-;; Copyright (C) 2016-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2016-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 
@@ -191,7 +191,7 @@ Usage example:
           (format
            "%s (%s): "
            prompt
-           (mapconcat (lambda (e) (cdr e)) altered-names ", ")))
+           (mapconcat #'cdr altered-names ", ")))
          tchar buf wrong-char answer command)
     (save-window-excursion
       (save-excursion
@@ -216,8 +216,14 @@ Usage example:
                                     (car elem)))
                             prompt-choices)))
                   (condition-case nil
-                      (let ((cursor-in-echo-area t))
-                        (read-event))
+                      (let ((cursor-in-echo-area t)
+                            ;; Do NOT use read-event here.  That
+                            ;; function does not consult
+                            ;; input-decode-map (bug#75886).
+                            (key (read-key)))
+                        (when (eq key ?\C-g)
+                          (signal 'quit nil))
+                        key)
                     (error nil))))
           (if (memq (car-safe tchar) '(touchscreen-begin
                                        touchscreen-end

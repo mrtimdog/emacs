@@ -1,6 +1,6 @@
 ;;; tex-mode.el --- TeX, LaTeX, and SliTeX mode commands  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2024 Free
+;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2025 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -64,7 +64,7 @@
   :group 'tex-run)
 
 ;;;###autoload
-(defcustom tex-directory (purecopy ".")
+(defcustom tex-directory "."
   "Directory in which temporary files are written.
 You can make this `/tmp' if your TEXINPUTS has no relative directories in it
 and you don't try to apply \\[tex-region] or \\[tex-buffer] when there are
@@ -98,7 +98,7 @@ if the variable is non-nil."
   :group 'tex-file)
 
 ;;;###autoload
-(defcustom tex-run-command (purecopy "tex")
+(defcustom tex-run-command "tex"
   "Command used to run TeX subjob.
 TeX Mode sets `tex-command' to this string.
 See the documentation of that variable."
@@ -106,7 +106,7 @@ See the documentation of that variable."
   :group 'tex-run)
 
 ;;;###autoload
-(defcustom latex-run-command (purecopy "latex")
+(defcustom latex-run-command "latex"
   "Command used to run LaTeX subjob.
 LaTeX Mode sets `tex-command' to this string.
 See the documentation of that variable."
@@ -114,7 +114,7 @@ See the documentation of that variable."
   :group 'tex-run)
 
 ;;;###autoload
-(defcustom slitex-run-command (purecopy "slitex")
+(defcustom slitex-run-command "slitex"
   "Command used to run SliTeX subjob.
 SliTeX Mode sets `tex-command' to this string.
 See the documentation of that variable."
@@ -122,7 +122,7 @@ See the documentation of that variable."
   :group 'tex-run)
 
 ;;;###autoload
-(defcustom tex-start-options (purecopy "")
+(defcustom tex-start-options ""
   "TeX options to use when starting TeX.
 These immediately precede the commands in `tex-start-commands'
 and the input file name, with no separating space and are not shell-quoted.
@@ -132,7 +132,7 @@ If nil, TeX runs with no options.  See the documentation of `tex-command'."
   :version "22.1")
 
 ;;;###autoload
-(defcustom tex-start-commands (purecopy "\\nonstopmode\\input")
+(defcustom tex-start-commands "\\nonstopmode\\input"
   "TeX commands to use when starting TeX.
 They are shell-quoted and precede the input file name, with a separating space.
 If nil, no commands are used.  See the documentation of `tex-command'."
@@ -163,7 +163,7 @@ Combined with `latex-standard-block-names' for minibuffer completion."
   :group 'tex-run)
 
 ;;;###autoload
-(defcustom tex-bibtex-command (purecopy "bibtex")
+(defcustom tex-bibtex-command "bibtex"
   "Command used by `tex-bibtex-file' to gather bibliographic data.
 If this string contains an asterisk (`*'), that is replaced by the file name;
 otherwise, the file name, preceded by blank, is added at the end."
@@ -171,7 +171,7 @@ otherwise, the file name, preceded by blank, is added at the end."
   :group 'tex-run)
 
 ;;;###autoload
-(defcustom tex-dvi-print-command (purecopy "lpr -d")
+(defcustom tex-dvi-print-command "lpr -d"
   "Command used by \\[tex-print] to print a .dvi file.
 If this string contains an asterisk (`*'), that is replaced by the file name;
 otherwise, the file name, preceded by blank, is added at the end."
@@ -179,7 +179,7 @@ otherwise, the file name, preceded by blank, is added at the end."
   :group 'tex-view)
 
 ;;;###autoload
-(defcustom tex-alt-dvi-print-command (purecopy "lpr -d")
+(defcustom tex-alt-dvi-print-command "lpr -d"
   "Command used by \\[tex-print] with a prefix arg to print a .dvi file.
 If this string contains an asterisk (`*'), that is replaced by the file name;
 otherwise, the file name, preceded by blank, is added at the end.
@@ -199,22 +199,22 @@ use."
 
 ;;;###autoload
 (defcustom tex-dvi-view-command
-  `(cond
-    ((eq window-system 'x) ,(purecopy "xdvi"))
-    ((eq window-system 'w32) ,(purecopy "yap"))
-    (t ,(purecopy "dvi2tty * | cat -s")))
+  (cond ((eq window-system 'x) "xdvi")
+        ((eq window-system 'w32) "yap")
+        (t "dvi2tty * | cat -s"))
   "Command used by \\[tex-view] to display a `.dvi' file.
-If it is a string, that specifies the command directly.
 If this string contains an asterisk (`*'), that is replaced by the file name;
 otherwise, the file name, preceded by a space, is added at the end.
 
-If the value is a form, it is evaluated to get the command to use."
-  :type '(choice (const nil) string sexp)
+For backwards-compatibility, the value can also be a form, in which case
+it is evaluated to get the command to use.  This is now obsolete, and
+will lead to a warning.  Set it to a string instead."
+  :type '(choice (const nil) string)
   :risky t
   :group 'tex-view)
 
 ;;;###autoload
-(defcustom tex-show-queue-command (purecopy "lpq")
+(defcustom tex-show-queue-command "lpq"
   "Command used by \\[tex-show-print-queue] to show the print queue.
 Should show the queue(s) that \\[tex-print] puts jobs on."
   :type 'string
@@ -230,14 +230,14 @@ Normally set to either `plain-tex-mode' or `latex-mode'."
   :group 'tex)
 
 ;;;###autoload
-(defcustom tex-open-quote (purecopy "``")
+(defcustom tex-open-quote "``"
   "String inserted by typing \\[tex-insert-quote] to open a quotation."
   :type 'string
   :options '("``" "\"<" "\"`" "<<" "«")
   :group 'tex)
 
 ;;;###autoload
-(defcustom tex-close-quote (purecopy "''")
+(defcustom tex-close-quote "''"
   "String inserted by typing \\[tex-insert-quote] to close a quotation."
   :type 'string
   :options '("''" "\">" "\"'" ">>" "»")
@@ -2092,8 +2092,9 @@ In the tex shell buffer this command behaves like `comint-send-input'."
 
 (defun tex-display-shell ()
   "Make the TeX shell buffer visible in a window."
-  (with-suppressed-warnings ((obsolete display-tex-shell-buffer-action))
-    (display-buffer (tex-shell-buf) display-tex-shell-buffer-action))
+  (display-buffer (tex-shell-buf) '(display-buffer-in-previous-window
+                                    (inhibit-same-window . t)
+                                    (category . tex-shell)))
   (tex-recenter-output-buffer nil))
 
 (defun tex-shell-sentinel (proc _msg)
@@ -2753,8 +2754,9 @@ line LINE of the window, or centered if LINE is nil."
     (if (null tex-shell)
 	(message "No TeX output buffer")
       (when-let* ((window
-                   (with-suppressed-warnings ((obsolete display-tex-shell-buffer-action))
-                     (display-buffer tex-shell display-tex-shell-buffer-action))))
+                   (display-buffer tex-shell '(display-buffer-in-previous-window
+                                               (inhibit-same-window . t)
+                                               (category . tex-shell)))))
         (with-selected-window window
 	  (bury-buffer tex-shell)
 	  (goto-char (point-max))
@@ -2802,6 +2804,7 @@ Runs the shell command defined by `tex-alt-dvi-print-command'."
   (interactive)
   (tex-print t))
 
+(defvar tex-view--warned-once nil)
 (defun tex-view ()
   "Preview the last `.dvi' file made by running TeX under Emacs.
 This means, made using \\[tex-region], \\[tex-buffer] or \\[tex-file].
@@ -2814,7 +2817,14 @@ because there is no standard value that would generally work."
   ;; Restart the TeX shell if necessary.
   (or (tex-shell-running)
       (tex-start-shell))
-  (let ((tex-dvi-print-command (eval tex-dvi-view-command t)))
+  (let ((tex-dvi-print-command
+         (if (stringp tex-dvi-view-command)
+             tex-dvi-view-command
+           (unless tex-view--warned-once
+             (warn (concat "Setting `tex-dvi-view-command' to an S-expression"
+                           " is obsolete since Emacs " "31.1"))
+             (setq tex-view--warned-once t))
+           (eval tex-dvi-view-command t))))
     (tex-print)))
 
 (defun tex-append (file-name suffix)
@@ -3060,7 +3070,7 @@ There might be text before point."
 		     '(?\n nil))))
       ;; Anything else is just as for LaTeX.
       (tex-font-lock-syntactic-face-function state)
-    font-lock-doc-face))
+    'font-lock-doc-face))
 
 (eval-when-compile
   (defconst doctex-syntax-propertize-rules
@@ -4010,8 +4020,8 @@ There might be text before point."
                       (ext (file-name-extension fbuf))
                       (finext (concat "*." ext))
                       ((not (seq-find (lambda (elt) (string-match-p elt finext))
-                                      extlist-new)))
-                      ((push finext extlist-new)))))
+                                      extlist-new))))
+            (push finext extlist-new)))
         (unless (seq-set-equal-p extlist-new extlist)
           (setf (alist-get mode semantic-symref-filepattern-alist)
                 extlist-new))))

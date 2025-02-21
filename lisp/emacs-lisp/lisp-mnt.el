@@ -1,6 +1,6 @@
 ;;; lisp-mnt.el --- utility functions for Emacs Lisp maintainers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric S. Raymond <esr@thyrsus.com>
 ;; Maintainer: emacs-devel@gnu.org
@@ -468,6 +468,13 @@ package version (a string)."
       (lm--prepare-package-dependencies
        (package-read-from-string (mapconcat #'identity require-lines " "))))))
 
+(defun lm-package-version (&optional file)
+  "Return \"Package-Version\" or \"Version\" header.
+Prefer Package-Version; if defined, the package author
+probably wants us to use it.  Otherwise try Version."
+  (lm-with-file file
+    (or (lm-header "package-version") (lm-header "version"))))
+
 (defun lm-package-needs-footer-line (&optional file)
   "Return non-nil if package in current buffer needs a footer line.
 
@@ -660,8 +667,6 @@ which do not include a recognizable synopsis."
                 (message "%s" (lm-summary))
               (lm-summary))
           (when must-kill (kill-buffer (current-buffer))))))))
-
-(defvar report-emacs-bug-address)
 
 (defun lm-report-bug (topic)
   "Report a bug in the package currently being visited to its maintainer.

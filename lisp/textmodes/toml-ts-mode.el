@@ -1,6 +1,6 @@
 ;;; toml-ts-mode.el --- tree-sitter support for TOML  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Jostein Kjønigsen <jostein@kjonigsen.net>
 ;; Maintainer : Jostein Kjønigsen <jostein@kjonigsen.net>
@@ -137,6 +137,14 @@ Return nil if there is no name or if NODE is not a defun node."
     (setq-local treesit-defun-type-regexp
                 (rx (or "table" "table_array_element")))
     (setq-local treesit-defun-name-function #'toml-ts-mode--defun-name)
+    (setq-local treesit-thing-settings
+                `((toml
+                   (list
+                    ,(rx bos (or "array" "inline_table") eos))
+                   (sentence
+                    ,(rx bos (or "pair") eos))
+                   (text
+                    ,(rx bos (or "comment") eos)))))
 
     ;; Font-lock.
     (setq-local treesit-font-lock-settings toml-ts-mode--font-lock-settings)

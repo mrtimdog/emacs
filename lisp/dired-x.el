@@ -1,6 +1,6 @@
 ;;; dired-x.el --- extra Dired functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2025 Free Software Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
 ;;	Lawrence R. Dodd <dodd@roebling.poly.edu>
@@ -498,8 +498,10 @@ status message."
                                nil
                                (if dired-omit-verbose
                                    (format "Omitted %%d line%%s in %s"
-                                           (abbreviate-file-name
-                                            dired-directory))
+                                           (replace-regexp-in-string
+                                            "%" "%%"
+                                            (abbreviate-file-name
+                                             dired-directory)))
                                  "")
                                init-count)))
               (force-mode-line-update))))

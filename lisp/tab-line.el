@@ -1,6 +1,6 @@
 ;;; tab-line.el --- window-local tabs with window buffers -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2019-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
 ;; Author: Juri Linkov <juri@linkov.net>
 ;; Keywords: windows tabs
@@ -555,12 +555,15 @@ This means that switching to a buffer previously shown in the same
 window will keep the same order of tabs that was before switching.
 And newly displayed buffers are added to the end of the tab line."
   (let* ((old-buffers (window-parameter nil 'tab-line-buffers))
-         (buffer-positions (let ((index-table (make-hash-table :test 'eq)))
+         (buffer-positions (let ((index-table (make-hash-table
+                                               :size (length old-buffers)
+                                               :test #'eq)))
                              (seq-do-indexed
                               (lambda (buf idx) (puthash buf idx index-table))
                               old-buffers)
                              index-table))
          (new-buffers (sort (tab-line-tabs-window-buffers)
+                            :in-place t
                             :key (lambda (buffer)
                                    (gethash buffer buffer-positions
                                             most-positive-fixnum)))))
@@ -665,7 +668,7 @@ SELECTED-P nil means TAB is not the selected tab.
 When TAB is not selected and is even-numbered, make FACE
 inherit from `tab-line-tab-inactive-alternate'.  For use in
 `tab-line-tab-face-functions'."
-  (when (and (not selected-p) (cl-evenp (cl-position tab tabs)))
+  (when (and (not selected-p) (evenp (cl-position tab tabs)))
     (setf face `(:inherit (tab-line-tab-inactive-alternate ,face))))
   face)
 

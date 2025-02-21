@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985--1987, 1993--1995, 1997, 1999--2024 Free Software
+@c Copyright (C) 1985--1987, 1993--1995, 1997, 1999--2025 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Files
@@ -34,7 +34,7 @@ on file directories.
 * Copying and Naming::  Copying, naming and renaming files.
 * Misc File Ops::       Other things you can do on files.
 * Compressed Files::    Accessing compressed files.
-* File Archives::       Operating on tar, zip, jar etc. archive files.
+* File Archives::       Operating on tar, zip, jar etc.@: archive files.
 * Remote Files::        Accessing files on other machines.
 * Quoted File Names::   Quoting special characters in file names.
 * File Name Cache::     Completion against a list of files you often use.
@@ -995,7 +995,7 @@ File Shadowing is not available on MS Windows.
 
 @node Time Stamps
 @subsection Updating Time Stamps Automatically
-@cindex time stamps
+@cindex time stamps, automatic file timestamps
 @cindex modification dates
 @cindex last modified time
 
@@ -1070,6 +1070,22 @@ identify and update that custom template:
 %% time-stamp-pattern: "@{.yearpublished@}@{%Y@}"
 %% End:
 @end group
+@end example
+
+Here is another example, with the time stamp inserted into the last
+paragraph of an HTML document.  The @code{%%} in the pattern asks for
+the default format.
+
+@example
+@r{@dots{}}
+<p>Last modified: </p>
+</body>
+</html>
+<!--
+Local variables:
+time-stamp-pattern: "-10/Last modified: %%</p>$"
+End:
+-->
 @end example
 
 @vindex time-stamp-format

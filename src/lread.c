@@ -1,6 +1,6 @@
 /* Lisp parsing and input streams.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2024 Free Software Foundation,
+Copyright (C) 1985-1989, 1993-1995, 1997-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -398,7 +398,7 @@ readchar (Lisp_Object readcharfun, bool *multibyte)
 
   tem = call0 (readcharfun);
 
-  if (NILP (tem))
+  if (!FIXNUMP (tem))
     return -1;
   return XFIXNUM (tem);
 
@@ -524,7 +524,7 @@ unreadchar (Lisp_Object readcharfun, int c)
       unread_char = c;
     }
   else
-    call1 (readcharfun, make_fixnum (c));
+    calln (readcharfun, make_fixnum (c));
 }
 
 static int
@@ -816,7 +816,7 @@ read_filtered_event (bool no_switch_frame, bool ascii_required,
 	      tem1 = Fget (Fcar (tem), Qascii_character);
 	      /* Merge this symbol's modifier bits
 		 with the ASCII equivalent of its basic code.  */
-	      if (!NILP (tem1))
+	      if (FIXNUMP (tem1) && FIXNUMP (Fcar (Fcdr (tem))))
 		XSETFASTINT (val, XFIXNUM (tem1) | XFIXNUM (Fcar (Fcdr (tem))));
 	    }
 	}
@@ -898,7 +898,7 @@ If `inhibit-interaction' is non-nil, this function will signal an
     }
   val = read_filtered_event (1, 1, 1, ! NILP (inherit_input_method), seconds);
 
-  return (NILP (val) ? Qnil
+  return (!FIXNUMP (val) ? Qnil
 	  : make_fixnum (char_resolve_modifier_mask (XFIXNUM (val))));
 }
 
@@ -962,7 +962,7 @@ floating-point value.
 
 If `inhibit-interaction' is non-nil, this function will signal an
 `inhibited-interaction' error.  */)
-(Lisp_Object prompt, Lisp_Object inherit_input_method, Lisp_Object seconds)
+  (Lisp_Object prompt, Lisp_Object inherit_input_method, Lisp_Object seconds)
 {
   Lisp_Object val;
 
@@ -976,7 +976,7 @@ If `inhibit-interaction' is non-nil, this function will signal an
 
   val = read_filtered_event (1, 1, 0, ! NILP (inherit_input_method), seconds);
 
-  return (NILP (val) ? Qnil
+  return (!FIXNUMP (val) ? Qnil
 	  : make_fixnum (char_resolve_modifier_mask (XFIXNUM (val))));
 }
 
@@ -1342,7 +1342,7 @@ Return t if the file exists and loads successfully.  */)
   handler = Ffind_file_name_handler (file, Qload);
   if (!NILP (handler))
     return
-      call6 (handler, Qload, file, noerror, nomessage, nosuffix, must_suffix);
+      calln (handler, Qload, file, noerror, nomessage, nosuffix, must_suffix);
 
   /* The presence of this call is the result of a historical accident:
      it used to be in every file-operation and when it got removed
@@ -1446,7 +1446,7 @@ Return t if the file exists and loads successfully.  */)
       else
 	handler = Ffind_file_name_handler (found, Qload);
       if (! NILP (handler))
-	return call5 (handler, Qload, found, noerror, nomessage, Qt);
+	return calln (handler, Qload, found, noerror, nomessage, Qt);
 #ifdef DOS_NT
       /* Tramp has to deal with semi-broken packages that prepend
 	 drive letters to remote files.  For that reason, Tramp
@@ -1612,7 +1612,7 @@ Return t if the file exists and loads successfully.  */)
 	      lread_close (fd);
 	      clear_unwind_protect (fd_index);
 	    }
-	  val = call4 (Vload_source_file_function, found, hist_file_name,
+	  val = calln (Vload_source_file_function, found, hist_file_name,
 		       NILP (noerror) ? Qnil : Qt,
 		       (NILP (nomessage) || force_load_messages) ? Qnil : Qt);
 	  return unbind_to (count, val);
@@ -1673,7 +1673,7 @@ Return t if the file exists and loads successfully.  */)
     }
 
   if (! NILP (Vpurify_flag))
-    Vpreloaded_file_list = Fcons (Fpurecopy (file), Vpreloaded_file_list);
+    Vpreloaded_file_list = Fcons (file, Vpreloaded_file_list);
 
   if (NILP (nomessage) || force_load_messages)
     {
@@ -1720,8 +1720,11 @@ Return t if the file exists and loads successfully.  */)
     }
   else
     {
-      if (lisp_file_lexical_cookie (Qget_file_char) == Cookie_Lex)
-        Fset (Qlexical_binding, Qt);
+      lexical_cookie_t lexc = lisp_file_lexical_cookie (Qget_file_char);
+      Fset (Qlexical_binding,
+	    (lexc == Cookie_Lex ? Qt
+	     : lexc == Cookie_Dyn ? Qnil
+	     : Fdefault_toplevel_value (Qlexical_binding)));
 
       if (! version || version >= 22)
         readevalloop (Qget_file_char, &input, hist_file_name,
@@ -1739,7 +1742,7 @@ Return t if the file exists and loads successfully.  */)
 
   /* Run any eval-after-load forms for this file.  */
   if (!NILP (Ffboundp (Qdo_after_load_evaluation)))
-    call1 (Qdo_after_load_evaluation, hist_file_name) ;
+    calln (Qdo_after_load_evaluation, hist_file_name);
 
   for (int i = 0; i < ARRAYELTS (saved_strings); i++)
     {
@@ -2079,7 +2082,7 @@ openp (Lisp_Object path, Lisp_Object str, Lisp_Object suffixes,
 	      exists = !NILP (Ffile_readable_p (string));
 	    else
 	      {
-		Lisp_Object tmp = call1 (predicate, string);
+		Lisp_Object tmp = calln (predicate, string);
 		if (NILP (tmp))
 		  exists = false;
 		else if (EQ (tmp, Qdir_ok)
@@ -2343,7 +2346,7 @@ readevalloop_eager_expand_eval (Lisp_Object val, Lisp_Object macroexpand)
      form in the progn as a top-level form.  This way, if one form in
      the progn defines a macro, that macro is in effect when we expand
      the remaining forms.  See similar code in bytecomp.el.  */
-  val = call2 (macroexpand, val, Qnil);
+  val = calln (macroexpand, val, Qnil);
   if (EQ (CAR_SAFE (val), Qprogn))
     {
       Lisp_Object subforms = XCDR (val);
@@ -2352,7 +2355,7 @@ readevalloop_eager_expand_eval (Lisp_Object val, Lisp_Object macroexpand)
 	val = readevalloop_eager_expand_eval (XCAR (subforms), macroexpand);
     }
   else
-      val = eval_sub (call2 (macroexpand, val, Qt));
+      val = eval_sub (calln (macroexpand, val, Qt));
   return val;
 }
 
@@ -2490,18 +2493,18 @@ readevalloop (Lisp_Object readcharfun,
       if (! HASH_TABLE_P (read_objects_map)
 	  || XHASH_TABLE (read_objects_map)->count)
 	read_objects_map
-	  = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None, false);
+	  = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None);
       if (! HASH_TABLE_P (read_objects_completed)
 	  || XHASH_TABLE (read_objects_completed)->count)
 	read_objects_completed
-	  = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None, false);
+	  = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None);
       if (!NILP (Vpurify_flag) && c == '(')
 	val = read0 (readcharfun, false);
       else
 	{
 	  if (!NILP (readfun))
 	    {
-	      val = call1 (readfun, readcharfun);
+	      val = calln (readfun, readcharfun);
 
 	      /* If READCHARFUN has set point to ZV, we should
 	         stop reading, even if the form read sets point
@@ -2514,7 +2517,7 @@ readevalloop (Lisp_Object readcharfun,
 		}
 	    }
 	  else if (! NILP (Vload_read_function))
-	    val = call1 (Vload_read_function, readcharfun);
+	    val = calln (Vload_read_function, readcharfun);
 	  else
 	    val = read_internal_start (readcharfun, Qnil, Qnil, false);
 	}
@@ -2606,8 +2609,11 @@ This function preserves the position of point.  */)
   specbind (Qstandard_output, tem);
   record_unwind_protect_excursion ();
   BUF_TEMP_SET_PT (XBUFFER (buf), BUF_BEGV (XBUFFER (buf)));
+  lexical_cookie_t lexc = lisp_file_lexical_cookie (buf);
   specbind (Qlexical_binding,
-	    lisp_file_lexical_cookie (buf) == Cookie_Lex ? Qt : Qnil);
+	    lexc == Cookie_Lex ? Qt
+	    : lexc == Cookie_Dyn ? Qnil
+	    : Fdefault_toplevel_value (Qlexical_binding));
   BUF_TEMP_SET_PT (XBUFFER (buf), BUF_BEGV (XBUFFER (buf)));
   readevalloop (buf, 0, filename,
 		!NILP (printflag), unibyte, Qnil, Qnil, Qnil);
@@ -2673,8 +2679,7 @@ STREAM or the value of `standard-input' may be:
        minibuffer without a stream, as in (read).  But is this feature
        ever used, and if so, why?  IOW, will anything break if this
        feature is removed !?  */
-    return call1 (Qread_minibuffer,
-		  build_string ("Lisp expression: "));
+    return calln (Qread_minibuffer, build_string ("Lisp expression: "));
 
   return read_internal_start (stream, Qnil, Qnil, false);
 }
@@ -2701,8 +2706,7 @@ STREAM or the value of `standard-input' may be:
     stream = Qread_char;
   if (EQ (stream, Qread_char))
     /* FIXME: ?! When is this used !?  */
-    return call1 (Qread_minibuffer,
-		  build_string ("Lisp expression: "));
+    return calln (Qread_minibuffer, build_string ("Lisp expression: "));
 
   return read_internal_start (stream, Qnil, Qnil, true);
 }
@@ -2740,11 +2744,11 @@ read_internal_start (Lisp_Object stream, Lisp_Object start, Lisp_Object end,
   if (! HASH_TABLE_P (read_objects_map)
       || XHASH_TABLE (read_objects_map)->count)
     read_objects_map
-      = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None, false);
+      = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None);
   if (! HASH_TABLE_P (read_objects_completed)
       || XHASH_TABLE (read_objects_completed)->count)
     read_objects_completed
-      = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None, false);
+      = make_hash_table (&hashtest_eq, DEFAULT_HASH_SIZE, Weak_None);
 
   if (STRINGP (stream)
       || ((CONSP (stream) && STRINGP (XCAR (stream)))))
@@ -2811,7 +2815,7 @@ character_name_to_code (char const *name, ptrdiff_t name_len,
   Lisp_Object code
     = (name[0] == 'U' && name[1] == '+'
        ? string_to_number (name + 1, 16, &len)
-       : call2 (Qchar_from_name, make_unibyte_string (name, name_len), Qt));
+       : calln (Qchar_from_name, make_unibyte_string (name, name_len), Qt));
 
   if (! RANGED_FIXNUMP (0, code, MAX_UNICODE_CHAR)
       || len != name_len - 1
@@ -2822,7 +2826,7 @@ character_name_to_code (char const *name, ptrdiff_t name_len,
       invalid_syntax_lisp (CALLN (Fformat, format, namestr), readcharfun);
     }
 
-  return XFIXNUM (code);
+  return FIXNUMP (code) ? XFIXNUM (code) : -1;
 }
 
 /* Bound on the length of a Unicode character name.  As of
@@ -3061,6 +3065,8 @@ read_char_escape (Lisp_Object readcharfun, int next_char)
       break;
     }
   eassert (chr >= 0 && chr < (1 << CHARACTERBITS));
+  if (chr < 0 || chr >= (1 << CHARACTERBITS))
+    invalid_syntax ("Invalid character", readcharfun);
 
   /* Apply Control modifiers, using the rules:
      \C-X = ascii_ctrl(nomod(X)) | mods(X)  if nomod(X) is one of:
@@ -3111,9 +3117,9 @@ digit_to_number (int character, int base)
 static void
 invalid_radix_integer (EMACS_INT radix, Lisp_Object readcharfun)
 {
-  char buf[64];
-  int n = snprintf (buf, sizeof buf, "integer, radix %"pI"d", radix);
-  eassert (n < sizeof buf);
+  static char const format[] = "integer, radix %"pI"d";
+  char buf[sizeof format - sizeof "%"pI"d" + INT_BUFSIZE_BOUND (radix)];
+  sprintf (buf, format, radix);
   invalid_syntax (buf, readcharfun);
 }
 
@@ -4433,10 +4439,7 @@ read0 (Lisp_Object readcharfun, bool locate_syms)
 	if (uninterned_symbol)
 	  {
 	    Lisp_Object name
-	      = (!NILP (Vpurify_flag)
-		 ? make_pure_string (read_buffer, nchars, nbytes, multibyte)
-		 : make_specified_string (read_buffer, nchars, nbytes,
-					  multibyte));
+	      = make_specified_string (read_buffer, nchars, nbytes, multibyte);
 	    result = Fmake_symbol (name);
 	  }
 	else
@@ -4968,10 +4971,7 @@ intern_c_string_1 (const char *str, ptrdiff_t len)
     {
       Lisp_Object string;
 
-      if (NILP (Vpurify_flag))
-	string = make_string (str, len);
-      else
-	string = make_pure_c_string (str, len);
+      string = make_string (str, len);
 
       tem = intern_driver (string, obarray, tem);
     }
@@ -4994,7 +4994,7 @@ static void
 define_symbol (Lisp_Object sym, char const *str)
 {
   ptrdiff_t len = strlen (str);
-  Lisp_Object string = make_pure_c_string (str, len);
+  Lisp_Object string = make_string (str, len);
   init_symbol (sym, string);
 
   /* Qunbound is uninterned, so that it's not confused with any symbol
@@ -5038,8 +5038,7 @@ it defaults to the value of `obarray'.  */)
 	  xfree (longhand);
 	}
       else
-	tem = intern_driver (NILP (Vpurify_flag) ? string : Fpurecopy (string),
-			     obarray, tem);
+	tem = intern_driver (string, obarray, tem);
     }
   return tem;
 }
@@ -5085,13 +5084,12 @@ it defaults to the value of `obarray'.  */)
     }
 }
 
-DEFUN ("unintern", Funintern, Sunintern, 1, 2, 0,
+DEFUN ("unintern", Funintern, Sunintern, 2, 2, 0,
        doc: /* Delete the symbol named NAME, if any, from OBARRAY.
 The value is t if a symbol was found and deleted, nil otherwise.
 NAME may be a string or a symbol.  If it is a symbol, that symbol
 is deleted, if it belongs to OBARRAY--no other symbol is deleted.
-OBARRAY, if nil, defaults to the value of the variable `obarray'.
-usage: (unintern NAME OBARRAY)  */)
+OBARRAY, if nil, defaults to the value of the variable `obarray'.  */)
   (Lisp_Object name, Lisp_Object obarray)
 {
   register Lisp_Object tem;
@@ -5401,7 +5399,7 @@ map_obarray (Lisp_Object obarray,
 static void
 mapatoms_1 (Lisp_Object sym, Lisp_Object function)
 {
-  call1 (function, sym);
+  calln (function, sym);
 }
 
 DEFUN ("mapatoms", Fmapatoms, Smapatoms, 1, 2, 0,
@@ -5483,7 +5481,7 @@ defsubr (union Aligned_Lisp_Subr *aname)
   set_symbol_function (sym, tem);
 #ifdef HAVE_NATIVE_COMP
   eassert (NILP (Vcomp_abi_hash));
-  Vcomp_subr_list = Fpurecopy (Fcons (tem, Vcomp_subr_list));
+  Vcomp_subr_list = Fcons (tem, Vcomp_subr_list);
 #endif
 }
 
@@ -5869,19 +5867,19 @@ This list includes suffixes for both compiled and source Emacs Lisp files.
 This list should not include the empty string.
 `load' and related functions try to append these suffixes, in order,
 to the specified file name if a suffix is allowed or required.  */);
-  Vload_suffixes = list2 (build_pure_c_string (".elc"),
-			  build_pure_c_string (".el"));
+  Vload_suffixes = list2 (build_string (".elc"),
+			  build_string (".el"));
 #ifdef HAVE_MODULES
-  Vload_suffixes = Fcons (build_pure_c_string (MODULES_SUFFIX), Vload_suffixes);
+  Vload_suffixes = Fcons (build_string (MODULES_SUFFIX), Vload_suffixes);
 #ifdef MODULES_SECONDARY_SUFFIX
   Vload_suffixes =
-    Fcons (build_pure_c_string (MODULES_SECONDARY_SUFFIX), Vload_suffixes);
+    Fcons (build_string (MODULES_SECONDARY_SUFFIX), Vload_suffixes);
 #endif
 #endif
   DEFVAR_LISP ("module-file-suffix", Vmodule_file_suffix,
 	       doc: /* Suffix of loadable module file, or nil if modules are not supported.  */);
 #ifdef HAVE_MODULES
-  Vmodule_file_suffix = build_pure_c_string (MODULES_SUFFIX);
+  Vmodule_file_suffix = build_string (MODULES_SUFFIX);
 #else
   Vmodule_file_suffix = Qnil;
 #endif
@@ -5891,9 +5889,9 @@ to the specified file name if a suffix is allowed or required.  */);
 
 #ifndef MSDOS
   Vdynamic_library_suffixes
-    = Fcons (build_pure_c_string (DYNAMIC_LIB_SECONDARY_SUFFIX), Qnil);
+    = Fcons (build_string (DYNAMIC_LIB_SECONDARY_SUFFIX), Qnil);
   Vdynamic_library_suffixes
-    = Fcons (build_pure_c_string (DYNAMIC_LIB_SUFFIX),
+    = Fcons (build_string (DYNAMIC_LIB_SUFFIX),
 	     Vdynamic_library_suffixes);
 #else
   Vdynamic_library_suffixes = Qnil;
@@ -6045,8 +6043,7 @@ from the file, and matches them against this regular expression.
 When the regular expression matches, the file is considered to be safe
 to load.  */);
   Vbytecomp_version_regexp
-    = build_pure_c_string
-        ("^;;;.\\(?:in Emacs version\\|bytecomp version FSF\\)");
+    = build_string ("^;;;.\\(in Emacs version\\|bytecomp version FSF\\)");
 
   DEFSYM (Qlexical_binding, "lexical-binding");
   DEFVAR_LISP ("lexical-binding", Vlexical_binding,
@@ -6116,7 +6113,7 @@ through `require'.  */);
 #if !IEEE_FLOATING_POINT
   for (int negative = 0; negative < 2; negative++)
     {
-      not_a_number[negative] = build_pure_c_string (&"-0.0e+NaN"[!negative]);
+      not_a_number[negative] = build_string (&"-0.0e+NaN"[!negative]);
       staticpro (&not_a_number[negative]);
     }
 #endif

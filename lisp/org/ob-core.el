@@ -1,6 +1,6 @@
 ;;; ob-core.el --- Working with Code Blocks          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	Dan Davison
@@ -1822,7 +1822,7 @@ HEADER-ARGUMENTS is an alist of all the arguments."
       (cons :colname-names (or (cdr (assq :colname-names params))
 			       (cadr  vars-and-names)))
       (cons :rowname-names (or (cdr (assq :rowname-names params))
-			       (cl-caddr vars-and-names)))
+                               (caddr vars-and-names)))
       (cons :result-params result-params)
       (cons :result-type  (cond ((member "output" result-params) 'output)
 				((member "value" result-params) 'value)

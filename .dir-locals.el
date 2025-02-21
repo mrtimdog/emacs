@@ -18,6 +18,7 @@
          (vc-default-patch-addressee . "bug-gnu-emacs@gnu.org")))
  (c-mode . ((c-file-style . "GNU")
             (c-noise-macro-names . ("INLINE" "NO_INLINE" "ATTRIBUTE_NO_SANITIZE_UNDEFINED"
+                                    "ATTRIBUTE_NO_SANITIZE_ADDRESS"
                                     "UNINIT" "CALLBACK" "ALIGN_STACK" "ATTRIBUTE_MALLOC"
                                     "ATTRIBUTE_DEALLOC_FREE" "ANDROID_EXPORT" "TEST_STATIC"
                                     "INLINE_HEADER_BEGIN" "INLINE_HEADER_END"))
@@ -33,6 +34,7 @@
  (objc-mode . ((c-file-style . "GNU")
                (electric-quote-comment . nil)
                (electric-quote-string . nil)
+               (indent-tabs-mode . t)
 	       (mode . bug-reference-prog)))
  (c-ts-mode . ((c-ts-mode-indent-style . gnu))) ;Inherits `c-mode' settings.
  (log-edit-mode . ((log-edit-font-lock-gnu-style . t)

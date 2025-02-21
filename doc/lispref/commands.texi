@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1995, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Command Loop
@@ -122,14 +122,13 @@ serves as a flag, telling the Emacs command loop that the function can
 be called interactively.  The argument of the @code{interactive} form
 specifies how the arguments for an interactive call should be read.
 
-@cindex @code{interactive-form} property
   Alternatively, an @code{interactive} form may be specified in a
 function symbol's @code{interactive-form} property.  A non-@code{nil}
 value for this property takes precedence over any @code{interactive}
 form in the function body itself.  This feature is seldom used.
 
 @anchor{The interactive-only property}
-@cindex @code{interactive-only} property
+@cindex @code{interactive-only} (symbol property)
   Sometimes, a function is only intended to be called interactively,
 never directly from Lisp.  In that case, give the function a
 non-@code{nil} @code{interactive-only} property, either directly
@@ -174,7 +173,7 @@ A command may be called from Lisp programs like any other function, but
 then the caller supplies the arguments and @var{arg-descriptor} has no
 effect.
 
-@cindex @code{interactive-form}, symbol property
+@cindex @code{interactive-form} (symbol property)
 The @code{interactive} form must be located at top-level in the
 function body, or in the function symbol's @code{interactive-form}
 property (@pxref{Symbol Properties}).  It has its effect because the
@@ -185,7 +184,7 @@ occurs within the body, the form simply returns @code{nil} without
 even evaluating its argument.
 
 The @var{modes} list allows specifying which modes the command is
-meant to be used in.  See @ref{Command Modes} for more details about
+meant to be used in.  @xref{Command Modes}, for more details about
 the effect of specifying @var{modes}, and when to use it.
 
 By convention, you should put the @code{interactive} form in the
@@ -2124,7 +2123,7 @@ been intercepted by another program.)  This is dubbed ``simple
 translation'', and produces a simple correspondence between touchpoint
 motion and mouse motion.
 
-@cindex @code{ignored-mouse-command}, a symbol property
+@cindex @code{ignored-mouse-command} (symbol property)
 However, some commands bound to
 @code{down-mouse-1}--@code{mouse-drag-region}, for example--either
 conflict with defined touch screen gestures (such as ``long-press to
@@ -2161,7 +2160,7 @@ non-@code{nil} value, as, for example, it may be by a caller of
 @code{read-key} expecting to receive @code{mouse-movement} and
 @code{drag-mouse-1} events.
 
-@cindex @code{mouse-1-menu-command}, a symbol property
+@cindex @code{mouse-1-menu-command} (symbol property)
 Since certain commands are also bound to @code{down-mouse-1} for the
 purpose of displaying pop-up menus, Emacs additionally behaves as
 illustrated in the last paragraph if @code{down-mouse-1} is bound to a
@@ -2756,6 +2755,14 @@ To test the signal handler, you can make Emacs send a signal to itself:
 @smallexample
 (signal-process (emacs-pid) 'sigusr1)
 @end smallexample
+
+@cindex @code{sleep-event} event
+@item (sleep-event @var{sleep-wake})
+This event is injected when the device Emacs is running on enters or
+leaves the sleep state.  A non-@code{nil} @var{sleep-wake} indicates
+entering the sleep state.
+
+This is implemented only on GNU/Linux.
 
 @cindex @code{language-change} event
 @item language-change
@@ -4030,6 +4037,30 @@ The keymap which defines how to handle special events---and which
 events are special---is in the variable @code{special-event-map}
 (@pxref{Controlling Active Maps}).
 
+@defun insert-special-event
+@cindex inserting special events
+This function inserts a special event into the input event queue.  Only
+event types which are contained in the @code{special-event-map} keymap
+are accepted.  As a result, the handler specified in the keymap is
+invoked.
+
+The function returns @code{nil}.  Example:
+
+@example
+(defun my-event-handler (event)
+  (interactive "e")
+  (message "Event arrived: %S" event))
+@result{} my-event-handler
+
+(keymap-set special-event-map "<sleep-event>" #'my-event-handler)
+@result{} my-event-handler
+
+(insert-special-event '(sleep-event t))
+@result{} nil
+@result{} "Event arrived: (sleep-event t)"
+@end example
+@end defun
+
 @node Waiting
 @section Waiting for Elapsed Time or Input
 @cindex waiting
@@ -4488,7 +4519,7 @@ confirmation before it can be executed.  Disabling is used for commands
 which might be confusing to beginning users, to prevent them from using
 the commands by accident.
 
-@kindex disabled
+@cindex @code{disabled} (symbol property)
   The low-level mechanism for disabling a command is to put a
 non-@code{nil} @code{disabled} property on the Lisp symbol for the
 command.  These properties are normally set up by the user's

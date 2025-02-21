@@ -1,6 +1,6 @@
 ;;; ox-odt.el --- OpenDocument Text Exporter for Org Mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
 ;; Author: Jambunathan K <kjambunathan at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, text
@@ -3293,13 +3293,13 @@ styles congruent with the ODF-1.2 specification."
 		     (= (1+ r) (car table-dimensions)))
 		"LastRow")
 	       ((and (cdr (assq 'use-banding-rows-styles cell-style-selectors))
-		     (= (% r 2) 1)) "EvenRow")
+		     (cl-oddp r)) "EvenRow")
 	       ((and (cdr (assq 'use-banding-rows-styles cell-style-selectors))
-		     (= (% r 2) 0)) "OddRow")
+		     (cl-evenp r)) "OddRow")
 	       ((and (cdr (assq 'use-banding-columns-styles cell-style-selectors))
-		     (= (% c 2) 1)) "EvenColumn")
+		     (cl-oddp c)) "EvenColumn")
 	       ((and (cdr (assq 'use-banding-columns-styles cell-style-selectors))
-		     (= (% c 2) 0)) "OddColumn")
+		     (cl-evenp c)) "OddColumn")
 	       (t ""))))
 	(concat template-name cell-type)))))
 

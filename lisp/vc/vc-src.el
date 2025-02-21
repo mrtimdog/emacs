@@ -1,6 +1,6 @@
 ;;; vc-src.el --- support for SRC version-control  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2025 Free Software Foundation, Inc.
 
 ;; Author: FSF (see vc.el for full credits)
 ;; Maintainer: emacs-devel@gnu.org
@@ -116,7 +116,7 @@ If nil, use the value of `vc-diff-switches'.  If t, use no switches."
 ;; for a registered backend without loading every backend.
 ;;;###autoload
 (defcustom vc-src-master-templates
-  (purecopy '("%s.src/%s,v"))
+  '("%s.src/%s,v")
   "Where to look for SRC master files.
 For a description of possible values, see `vc-check-master-templates'."
   :type '(choice (const :tag "Use standard SRC file names"

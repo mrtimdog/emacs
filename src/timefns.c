@@ -1,6 +1,6 @@
 /* Timestamp functions for Emacs
 
-Copyright (C) 1985-1987, 1989, 1993-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-1987, 1989, 1993-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -318,36 +318,7 @@ tzlookup (Lisp_Object zone, bool settz)
 void
 init_timefns (void)
 {
-#ifdef HAVE_UNEXEC
-  /* A valid but unlikely setting for the TZ environment variable.
-     It is OK (though a bit slower) if the user chooses this value.  */
-  static char dump_tz_string[] = "TZ=UtC0";
-
-  /* When just dumping out, set the time zone to a known unlikely value
-     and skip the rest of this function.  */
-  if (will_dump_with_unexec_p ())
-    {
-      xputenv (dump_tz_string);
-      tzset ();
-      return;
-    }
-#endif
-
   char *tz = getenv ("TZ");
-
-#ifdef HAVE_UNEXEC
-  /* If the execution TZ happens to be the same as the dump TZ,
-     change it to some other value and then change it back,
-     to force the underlying implementation to reload the TZ info.
-     This is needed on implementations that load TZ info from files,
-     since the TZ file contents may differ between dump and execution.  */
-  if (tz && strcmp (tz, &dump_tz_string[tzeqlen]) == 0)
-    {
-      ++*tz;
-      tzset ();
-      --*tz;
-    }
-#endif
 
   /* Set the time zone rule now, so that the call to putenv is done
      before multiple threads are active.  */
@@ -1950,15 +1921,24 @@ the data it can't find.  */)
 	  /* No local time zone name is available; use numeric zone instead.  */
 	  long int hour = offset / 3600;
 	  int min_sec = offset % 3600;
-	  int amin_sec = min_sec < 0 ? - min_sec : min_sec;
-	  int min = amin_sec / 60;
-	  int sec = amin_sec % 60;
-	  int min_prec = min_sec ? 2 : 0;
-	  int sec_prec = sec ? 2 : 0;
-	  char buf[sizeof "+0000" + INT_STRLEN_BOUND (long int)];
-	  zone_name = make_formatted_string (buf, "%c%.2ld%.*d%.*d",
-					     (offset < 0 ? '-' : '+'),
-					     hour, min_prec, min, sec_prec, sec);
+	  char buf[INT_STRLEN_BOUND (long int) + sizeof "5959"];
+	  int buflen = 0;
+	  buf[buflen++] = offset < 0 ? '-' : '+';
+	  buflen += sprintf (buf + buflen, "%.2ld", eabs (hour));
+	  if (min_sec)
+	    {
+	      int amin_sec = eabs (min_sec);
+	      int min = amin_sec / 60;
+	      int sec = amin_sec % 60;
+	      buf[buflen++] = '0' + min / 10;
+	      buf[buflen++] = '0' + min % 10;
+	      if (sec)
+		{
+		  buf[buflen++] = '0' + sec / 10;
+		  buf[buflen++] = '0' + sec % 10;
+		}
+	    }
+	  zone_name = make_string (buf, buflen);
 	}
     }
 
@@ -1987,16 +1967,24 @@ former.  */)
   return Qnil;
 }
 
+#ifndef MSDOS
+
 /* A buffer holding a string of the form "TZ=value", intended
    to be part of the environment.  If TZ is supposed to be unset,
    the buffer string is "tZ=".  */
  static char *tzvalbuf;
 
+#endif /* !MSDOS */
+
 /* Get the local time zone rule.  */
 char *
 emacs_getenv_TZ (void)
 {
+#ifndef MSDOS
   return tzvalbuf[0] == 'T' ? tzvalbuf + tzeqlen : 0;
+#else /* MSDOS */
+  return getenv ("TZ");
+#endif /* MSDOS */
 }
 
 /* Set the local time zone rule to TZSTRING, which can be null to
@@ -2010,6 +1998,7 @@ emacs_getenv_TZ (void)
 int
 emacs_setenv_TZ (const char *tzstring)
 {
+#ifndef MSDOS
   static ptrdiff_t tzvalbufsize;
   ptrdiff_t tzstringlen = tzstring ? strlen (tzstring) : 0;
   char *tzval = tzvalbuf;
@@ -2064,6 +2053,21 @@ emacs_setenv_TZ (const char *tzstring)
     xputenv (tzval);
 
   return 0;
+#else /* MSDOS */
+  /* Happily, there are no threads on MS-DOS that might be contending
+     with Emacs for access to TZ.  Call putenv to modify TZ: the code
+     above is not only unnecessary but results in modifications being
+     omitted in consequence of an internal environment counter
+     remaining unchanged despite DJGPP being all too ready to reuse
+     preexisting environment storage.  */
+  USE_SAFE_ALLOCA;
+  char *buf = SAFE_ALLOCA (tzeqlen + strlen (tzstring) + 1);
+  strcpy (buf, "TZ=");
+  strcpy (buf + tzeqlen, tzstring);
+  xputenv (buf);
+  SAFE_FREE ();
+  return 0;
+#endif /* MSDOS */
 }
 
 #ifdef NEED_ZTRILLION_INIT

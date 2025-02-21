@@ -1,6 +1,6 @@
 ;;; subr-tests.el --- Tests for subr.el  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2015-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2025 Free Software Foundation, Inc.
 
 ;; Author: Oleh Krehel <ohwoeowho@gmail.com>,
 ;;         Nicolas Petton <nicolas@petton.fr>
@@ -27,7 +27,75 @@
 
 ;;; Code:
 (require 'ert)
+(require 'ert-x)
 (eval-when-compile (require 'cl-lib))
+
+(ert-deftest subr-test-zerop ()
+  (should (zerop 0))
+  (should (zerop 0.0))
+  (should (zerop -0))
+  (should (zerop -0.0))
+  (should-not (zerop -0.0e+NaN))
+  (should-not (zerop 0.0e+NaN))
+  (should-not (zerop float-pi))
+  (should-not (zerop 1.0e+INF))
+  (should-not (zerop (random most-positive-fixnum)))
+  (should-not (zerop (- (random (- most-negative-fixnum)))))
+  (should-not (zerop (1+ most-positive-fixnum)))
+  (should-not (zerop (1- most-negative-fixnum)))
+  (should-error (zerop "-5") :type 'wrong-type-argument))
+
+(ert-deftest subr-test-plusp ()
+  (should-not (plusp -1.0e+INF))
+  (should-not (plusp -1.5e2))
+  (should-not (plusp -3.14))
+  (should-not (plusp -1))
+  (should-not (plusp -0.0))
+  (should-not (plusp 0))
+  (should-not (plusp 0.0))
+  (should-not (plusp -0.0e+NaN))
+  (should-not (plusp 0.0e+NaN))
+  (should (plusp 1))
+  (should (plusp 3.14))
+  (should (plusp 1.5e2))
+  (should (plusp 1.0e+INF))
+  (should-error (plusp "42") :type 'wrong-type-argument))
+
+(ert-deftest subr-test-minusp ()
+  (should (minusp -1.0e+INF))
+  (should (minusp -1.5e2))
+  (should (minusp -3.14))
+  (should (minusp -1))
+  (should-not (minusp -0.0))
+  (should-not (minusp 0))
+  (should-not (minusp 0.0))
+  (should-not (minusp -0.0e+NaN))
+  (should-not (minusp 0.0e+NaN))
+  (should-not (minusp 1))
+  (should-not (minusp 3.14))
+  (should-not (minusp 1.5e2))
+  (should-not (minusp 1.0e+INF))
+  (should-error (minusp "-42") :type 'wrong-type-argument))
+
+(ert-deftest subr-test-oddp ()
+  (should (oddp -3))
+  (should (oddp 3))
+  (should-not (oddp -2))
+  (should-not (oddp 0))
+  (should-not (oddp 2))
+  (should-error (oddp 3.0e+NaN) :type 'wrong-type-argument)
+  (should-error (oddp 3.0) :type 'wrong-type-argument)
+  (should-error (oddp "3") :type 'wrong-type-argument))
+
+(ert-deftest subr-test-evenp ()
+  (should (evenp -2))
+  (should (evenp 0))
+  (should (evenp 2))
+  (should-not (evenp -3))
+  (should-not (evenp 3))
+  (should-error (evenp 2.0e+NaN) :type 'wrong-type-argument)
+  (should-error (evenp 2.0) :type 'wrong-type-argument)
+  (should-error (evenp "2") :type 'wrong-type-argument))
 
 (ert-deftest let-when-compile ()
   ;; good case
@@ -1381,6 +1449,66 @@ final or penultimate step during initialization."))
                  (out (subst-char-in-string from to in))
                  (props-out (object-intervals out)))
             (should (equal props-out props-in))))))))
+
+(ert-deftest subr-tests-internal--c-header-file-path ()
+  (should (seq-every-p #'stringp (internal--c-header-file-path)))
+  (should (member "/usr/include" (internal--c-header-file-path)))
+  (should (equal (internal--c-header-file-path)
+                 (delete-dups (internal--c-header-file-path))))
+  ;; Return a meaningful result even if calling some compiler fails.
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (_program &optional _infile _destination _display &rest _args) 1)))
+    (should (seq-every-p #'stringp (internal--c-header-file-path)))
+    (should (member "/usr/include" (internal--c-header-file-path)))
+    (should (equal (internal--c-header-file-path)
+                   (delete-dups (internal--c-header-file-path))))))
+
+(ert-deftest subr-tests-internal--c-header-file-path/gcc-mocked ()
+  ;; Handle empty values of "gcc -print-multiarch".
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (_program &optional _infile _destination _display &rest args)
+               (when (equal (car args) "-print-multiarch")
+                 (insert "\n") 0))))
+    (should (member "/usr/include" (internal--c-header-file-path))))
+  ;; Handle single values of "gcc -print-multiarch".
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (_program &optional _infile _destination _display &rest args)
+               (when (equal (car args) "-print-multiarch")
+                 (insert "x86_64-linux-gnu\n") 0))))
+    (should (member "/usr/include/x86_64-linux-gnu" (internal--c-header-file-path)))))
+
+(ert-deftest subr-tests-internal--c-header-file-path/clang-mocked ()
+  ;; Handle clang 15.0.0 output on macOS 15.2.
+  (cl-letf (((symbol-function 'internal--gcc-is-clang-p) (lambda () t))
+            ((symbol-function 'call-process)
+             (lambda (_program &optional _infile _destination _display &rest _args)
+               (insert "\
+Apple clang version 15.0.0 (clang-1500.3.9.4)
+Target: arm64-apple-darwin24.2.0
+Thread model: posix
+InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+ \"/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang\"
+[[[...Emacs test omits some verbose junk from the output here...]]]
+clang -cc1 version 15.0.0 (clang-1500.3.9.4) default target arm64-apple-darwin24.2.0
+ignoring nonexistent directory \"/usr/local/include\"
+#include \"...\" search starts here:
+#include <...> search starts here:
+ /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/15.0.0/include
+ /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
+ /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include
+ /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks (framework directory)
+End of search list.
+# 1 \"<stdin>\"
+# 1 \"<built-in>\" 1
+# 1 \"<built-in>\" 3
+# 418 \"<built-in>\" 3
+# 1 \"<command line>\" 1
+# 1 \"<built-in>\" 2
+# 1 \"<stdin>\" 2")
+               0)))
+    (should (member "/usr/include" (internal--c-header-file-path)))
+    (should (member "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/15.0.0/include"
+                    (internal--c-header-file-path)))))
 
 (provide 'subr-tests)
 ;;; subr-tests.el ends here

@@ -1,5 +1,5 @@
 /* Manipulation of keymaps
-   Copyright (C) 1985-1988, 1993-1995, 1998-2024 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1998-2025 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -50,7 +50,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "keyboard.h"
 #include "termhooks.h"
 #include "blockinput.h"
-#include "puresize.h"
 #include "intervals.h"
 #include "keymap.h"
 #include "window.h"
@@ -121,8 +120,6 @@ in case you use it as a menu with `x-popup-menu'.  */)
 {
   if (!NILP (string))
     {
-      if (!NILP (Vpurify_flag))
-	string = Fpurecopy (string);
       return list2 (Qkeymap, string);
     }
   return list1 (Qkeymap);
@@ -301,7 +298,6 @@ Return PARENT.  PARENT should be nil or another keymap.  */)
 	 If we came to the end, add the parent in PREV.  */
       if (!CONSP (list) || KEYMAPP (list))
 	{
-	  CHECK_IMPURE (prev, XCONS (prev));
 	  XSETCDR (prev, parent);
 	  return parent;
 	}
@@ -579,7 +575,7 @@ map_keymap_internal (Lisp_Object map,
 static void
 map_keymap_call (Lisp_Object key, Lisp_Object val, Lisp_Object fun, void *dummy)
 {
-  call2 (fun, key, val);
+  calln (fun, key, val);
 }
 
 /* Same as map_keymap_internal, but traverses parent keymaps as well.
@@ -642,7 +638,7 @@ usage: (map-keymap FUNCTION KEYMAP)  */)
   (Lisp_Object function, Lisp_Object keymap, Lisp_Object sort_first)
 {
   if (! NILP (sort_first))
-    return call2 (Qmap_keymap_sorted, function, keymap);
+    return calln (Qmap_keymap_sorted, function, keymap);
 
   map_keymap (keymap, map_keymap_call, function, NULL, 1);
   return Qnil;
@@ -744,7 +740,7 @@ store_in_keymap (Lisp_Object keymap, register Lisp_Object idx,
 
   /* If we are preparing to dump, and DEF is a menu element
      with a menu item indicator, copy it to ensure it is not pure.  */
-  if (CONSP (def) && PURE_P (XCONS (def))
+  if (CONSP (def)
       && (EQ (XCAR (def), Qmenu_item) || STRINGP (XCAR (def))))
     def = Fcons (XCAR (def), XCDR (def));
 
@@ -788,7 +784,6 @@ store_in_keymap (Lisp_Object keymap, register Lisp_Object idx,
 	  {
 	    if (FIXNATP (idx) && XFIXNAT (idx) < ASIZE (elt))
 	      {
-		CHECK_IMPURE (elt, XVECTOR (elt));
 		ASET (elt, XFIXNAT (idx), def);
 		return def;
 	      }
@@ -846,7 +841,6 @@ store_in_keymap (Lisp_Object keymap, register Lisp_Object idx,
 	      }
 	    else if (EQ (idx, XCAR (elt)))
 	      {
-		CHECK_IMPURE (elt, XCONS (elt));
 		if (remove)
 		  /* Remove the element. */
 		  insertion_point = Fdelq (elt, insertion_point);
@@ -901,7 +895,6 @@ store_in_keymap (Lisp_Object keymap, register Lisp_Object idx,
 	  }
 	else
 	  elt = Fcons (idx, def);
-	CHECK_IMPURE (insertion_point, XCONS (insertion_point));
 	XSETCDR (insertion_point, Fcons (elt, XCDR (insertion_point)));
       }
   }
@@ -1069,9 +1062,9 @@ possibly_translate_key_sequence (Lisp_Object key, ptrdiff_t *length)
          This happens when menu items define as bindings strings that
          should be inserted into the buffer, not commands.  See
          bug#64927, for example.  */
-      if (NILP (call1 (Qkey_valid_p, AREF (key, 0))))
+      if (NILP (calln (Qkey_valid_p, AREF (key, 0))))
 	return key;
-      key = call1 (Qkey_parse, AREF (key, 0));
+      key = calln (Qkey_parse, AREF (key, 0));
       *length = CHECK_VECTOR_OR_STRING (key);
       if (*length == 0)
 	xsignal2 (Qerror, build_string ("Invalid `key-parse' syntax: %S"), key);
@@ -1745,12 +1738,22 @@ like in the respective argument of `key-binding'.  */)
 		  && XFIXNUM (pos) >= 0
 		  && XFIXNUM (pos) < SCHARS (string))
 		{
-		  Lisp_Object map = Fget_text_property (pos, Qlocal_map, string);
-		  if (!NILP (map))
+		  Lisp_Object map = Fget_text_property (pos, Qlocal_map,
+							string);
+		  Lisp_Object pos_area = POSN_POSN (position);
+		  /* For clicks on mode line or header line, override
+		     the maps we found at POSITION unconditionally, even
+		     if the corresponding properties of the mode- or
+		     header-line string are nil, because propertries at
+		     point are not relevant in that case.  */
+		  if (!NILP (map)
+		      || EQ (pos_area, Qmode_line)
+		      || EQ (pos_area, Qheader_line))
 		    local_map = map;
-
 		  map = Fget_text_property (pos, Qkeymap, string);
-		  if (!NILP (map))
+		  if (!NILP (map)
+		      || EQ (pos_area, Qmode_line)
+		      || EQ (pos_area, Qheader_line))
 		    keymap = map;
 		}
 	    }
@@ -2863,7 +2866,7 @@ You type        Translation\n\
 	    if (alternate_heading)
 	      {
 		insert_string (alternate_heading);
-		alternate_heading = 0;
+		alternate_heading = NULL;
 	      }
 
 	    bufend = push_key_description (translate[c], buf);
@@ -2884,22 +2887,18 @@ You type        Translation\n\
   if (!NILP (Vkey_translation_map))
     {
       Lisp_Object msg = build_unibyte_string ("Key translations");
-      CALLN (Ffuncall,
-	     Qhelp__describe_map_tree,
+      calln (Qhelp__describe_map_tree,
 	     Vkey_translation_map, Qnil, Qnil, prefix,
 	     msg, nomenu, Qt, Qnil, Qnil, buffer);
     }
 
   /* Print the (major mode) local map.  */
-  Lisp_Object start1 = Qnil;
-  if (!NILP (KVAR (current_kboard, Voverriding_terminal_local_map)))
-    start1 = KVAR (current_kboard, Voverriding_terminal_local_map);
+  Lisp_Object start1 = KVAR (current_kboard, Voverriding_terminal_local_map);
 
   if (!NILP (start1))
     {
       Lisp_Object msg = build_unibyte_string ("\f\nOverriding Bindings");
-      CALLN (Ffuncall,
-	     Qhelp__describe_map_tree,
+      calln (Qhelp__describe_map_tree,
 	     start1, Qt, shadow, prefix,
 	     msg, nomenu, Qnil, Qnil, Qnil, buffer);
       shadow = Fcons (start1, shadow);
@@ -2911,8 +2910,7 @@ You type        Translation\n\
   if (!NILP (start1))
     {
       Lisp_Object msg = build_unibyte_string ("\f\nOverriding Bindings");
-      CALLN (Ffuncall,
-	     Qhelp__describe_map_tree,
+      calln (Qhelp__describe_map_tree,
 	     start1, Qt, shadow, prefix,
 	     msg, nomenu, Qnil, Qnil, Qnil, buffer);
       shadow = Fcons (start1, shadow);
@@ -2934,8 +2932,7 @@ You type        Translation\n\
       if (!NILP (start1))
 	{
 	  Lisp_Object msg = build_unibyte_string ("\f\n`keymap' Property Bindings");
-	  CALLN (Ffuncall,
-		 Qhelp__describe_map_tree,
+	  calln (Qhelp__describe_map_tree,
 		 start1, Qt, shadow, prefix,
 		 msg, nomenu, Qnil, Qnil, Qnil, buffer);
 	  shadow = Fcons (start1, shadow);
@@ -2967,8 +2964,7 @@ You type        Translation\n\
 	  *p = 0;
 
 	  Lisp_Object msg = build_unibyte_string (title);
-	  CALLN (Ffuncall,
-		 Qhelp__describe_map_tree,
+	  calln (Qhelp__describe_map_tree,
 		 maps[i], Qt, shadow, prefix,
 		 msg, nomenu, Qnil, Qnil, Qnil, buffer);
 	  shadow = Fcons (maps[i], shadow);
@@ -2985,16 +2981,14 @@ You type        Translation\n\
 		CALLN (Fformat,
 		       build_unibyte_string ("\f\n`%s' Major Mode Bindings"),
 		       XBUFFER (buffer)->major_mode_);
-	      CALLN (Ffuncall,
-		     Qhelp__describe_map_tree,
+	      calln (Qhelp__describe_map_tree,
 		     start1, Qt, shadow, prefix,
 		     msg, nomenu, Qnil, Qnil, Qnil, buffer);
 	    }
 	  else
 	    {
 	      Lisp_Object msg = build_unibyte_string ("\f\n`local-map' Property Bindings");
-	      CALLN (Ffuncall,
-		     Qhelp__describe_map_tree,
+	      calln (Qhelp__describe_map_tree,
 		     start1, Qt, shadow, prefix,
 		     msg, nomenu, Qnil, Qnil, Qnil, buffer);
 	    }
@@ -3004,8 +2998,7 @@ You type        Translation\n\
     }
 
   Lisp_Object msg = build_unibyte_string ("\f\nGlobal Bindings");
-  CALLN (Ffuncall,
-	 Qhelp__describe_map_tree,
+  calln (Qhelp__describe_map_tree,
 	 current_global_map, Qt, shadow, prefix,
 	 msg, nomenu, Qnil, Qt, Qnil, buffer);
 
@@ -3013,8 +3006,7 @@ You type        Translation\n\
   if (!NILP (KVAR (current_kboard, Vlocal_function_key_map)))
     {
       Lisp_Object msg = build_unibyte_string ("\f\nFunction key map translations");
-      CALLN (Ffuncall,
-	     Qhelp__describe_map_tree,
+      calln (Qhelp__describe_map_tree,
 	     KVAR (current_kboard, Vlocal_function_key_map), Qnil, Qnil, prefix,
 	     msg, nomenu, Qt, Qnil, Qnil, buffer);
     }
@@ -3023,8 +3015,7 @@ You type        Translation\n\
   if (!NILP (KVAR (current_kboard, Vinput_decode_map)))
     {
       Lisp_Object msg = build_unibyte_string ("\f\nInput decoding map translations");
-      CALLN (Ffuncall,
-	     Qhelp__describe_map_tree,
+      calln (Qhelp__describe_map_tree,
 	     KVAR (current_kboard, Vinput_decode_map), Qnil, Qnil, prefix,
 	     msg, nomenu, Qt, Qnil, Qnil, buffer);
     }
@@ -3035,14 +3026,14 @@ static void
 describe_vector_princ (Lisp_Object elt, Lisp_Object fun)
 {
   Findent_to (make_fixnum (16), make_fixnum (1));
-  call1 (fun, elt);
+  calln (fun, elt);
   Fterpri (Qnil, Qnil);
 }
 
 static void
 describe_vector_basic (Lisp_Object elt, Lisp_Object fun)
 {
-  call1 (fun, elt);
+  calln (fun, elt);
 }
 
 DEFUN ("describe-vector", Fdescribe_vector, Sdescribe_vector, 1, 2, 0,
@@ -3357,12 +3348,12 @@ syms_of_keymap (void)
   current_global_map = Qnil;
   staticpro (&current_global_map);
 
-  exclude_keys = pure_list
-    (pure_cons (build_pure_c_string ("DEL"), build_pure_c_string ("\\d")),
-     pure_cons (build_pure_c_string ("TAB"), build_pure_c_string ("\\t")),
-     pure_cons (build_pure_c_string ("RET"), build_pure_c_string ("\\r")),
-     pure_cons (build_pure_c_string ("ESC"), build_pure_c_string ("\\e")),
-     pure_cons (build_pure_c_string ("SPC"), build_pure_c_string (" ")));
+  exclude_keys = list
+    (Fcons (build_string ("DEL"), build_string ("\\d")),
+     Fcons (build_string ("TAB"), build_string ("\\t")),
+     Fcons (build_string ("RET"), build_string ("\\r")),
+     Fcons (build_string ("ESC"), build_string ("\\e")),
+     Fcons (build_string ("SPC"), build_string (" ")));
   staticpro (&exclude_keys);
 
   DEFVAR_LISP ("minibuffer-local-map", Vminibuffer_local_map,
@@ -3424,13 +3415,13 @@ that describe key bindings.  That is why the default is nil.  */);
   DEFSYM (Qmode_line, "mode-line");
 
   staticpro (&Vmouse_events);
-  Vmouse_events = pure_list (Qmenu_bar, Qtab_bar, Qtool_bar,
-			     Qtab_line, Qheader_line, Qmode_line,
-			     intern_c_string ("mouse-1"),
-			     intern_c_string ("mouse-2"),
-			     intern_c_string ("mouse-3"),
-			     intern_c_string ("mouse-4"),
-			     intern_c_string ("mouse-5"));
+  Vmouse_events = list (Qmenu_bar, Qtab_bar, Qtool_bar, Qtab_line,
+			Qheader_line, Qmode_line,
+			intern_c_string ("mouse-1"),
+			intern_c_string ("mouse-2"),
+			intern_c_string ("mouse-3"),
+			intern_c_string ("mouse-4"),
+			intern_c_string ("mouse-5"));
 
   /* Keymap used for minibuffers when doing completion.  */
   /* Keymap used for minibuffers when doing completion and require a match.  */

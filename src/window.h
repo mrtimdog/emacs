@@ -1,5 +1,5 @@
 /* Window definitions for GNU Emacs.
-   Copyright (C) 1985-1986, 1993, 1995, 1997-2024 Free Software
+   Copyright (C) 1985-1986, 1993, 1995, 1997-2025 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -1116,6 +1116,10 @@ extern Lisp_Object minibuf_window;
 
 extern Lisp_Object minibuf_selected_window;
 
+/* Non-nil means it is the window containing the last mouse movement.  */
+
+extern Lisp_Object last_mouse_window;
+
 extern Lisp_Object make_window (void);
 extern Lisp_Object window_from_coordinates (struct frame *, int, int,
                                             enum window_part *, bool, bool, bool);
@@ -1227,6 +1231,7 @@ extern void wset_buffer (struct window *, Lisp_Object);
 extern bool window_outdated (struct window *);
 extern ptrdiff_t window_point (struct window *w);
 extern void window_discard_buffer_from_dead_windows (Lisp_Object);
+extern Lisp_Object mru_rooted_frame (struct frame *);
 extern void init_window_once (void);
 extern void init_window (void);
 extern void syms_of_window (void);

@@ -1,6 +1,6 @@
 ;;; latexenc.el --- guess correct coding system in LaTeX files -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2005-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
 ;; Author: Arne Jørgensen <arne@arnested.dk>
 ;; Keywords: mule, coding system, latex
@@ -51,7 +51,6 @@
 
 ;;;###autoload
 (defcustom latex-inputenc-coding-alist
-  (purecopy
   '(("ansinew" . windows-1252) ; MS Windows ANSI encoding, extension of Latin-1
     ("applemac" . mac-roman)
     ("ascii" . us-ascii)
@@ -74,7 +73,7 @@
     ;; ("macce" . undecided) ; Apple Central European
     ("next" . next) ; The Next encoding
     ("utf8" . utf-8)
-    ("utf8x" . utf-8))) ; used by the Unicode LaTeX package
+    ("utf8x" . utf-8)) ; used by the Unicode LaTeX package
   "Mapping from LaTeX encodings in \"inputenc.sty\" to Emacs coding systems.
 LaTeX encodings are specified with \"\\usepackage[encoding]{inputenc}\".
 Used by the function `latexenc-find-file-coding-system'."

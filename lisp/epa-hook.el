@@ -1,6 +1,6 @@
 ;;; epa-hook.el --- preloaded code to enable epa-file.el -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2025 Free Software Foundation, Inc.
 
 ;; Author: Daiki Ueno <ueno@unixuser.org>
 ;; Keywords: PGP, GnuPG
@@ -35,7 +35,7 @@
   (if (fboundp 'epa-file-name-regexp-update)
       (epa-file-name-regexp-update)))
 
-(defcustom epa-file-name-regexp (purecopy "\\.gpg\\(~\\|\\.~[0-9]+~\\)?\\'")
+(defcustom epa-file-name-regexp "\\.gpg\\(~\\|\\.~[0-9]+~\\)?\\'"
   "Regexp which matches filenames to be encrypted with GnuPG.
 
 If you set this outside Custom while epa-file is already enabled,

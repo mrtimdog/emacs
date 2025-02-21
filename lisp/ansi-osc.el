@@ -1,6 +1,6 @@
 ;;; ansi-osc.el --- Support for OSC escape sequences      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author: Augusto Stoffel <arstoffel@gmail.com>
 ;;         Matthias Meulien <orontee@gmail.com>
@@ -116,15 +116,16 @@ such as with the following command:
 
     printf \"\\e]7;file://%s%s\\e\\\\\" \"$HOSTNAME\" \"$PWD\"
 
+A remote `default-directory' is maintained.
+
 This functionality serves as an alternative to `dirtrack-mode'
 and `shell-dirtrack-mode'."
-  (let ((url (url-generic-parse-url text)))
-    (when (and (string= (url-type url) "file")
-               (or (null (url-host url))
-                   ;; Use `downcase' to match `url-generic-parse-url' behavior
-                   (string= (url-host url) (downcase (system-name)))))
-      (ignore-errors
-        (cd-absolute (url-unhex-string (url-filename url)))))))
+  (when-let* ((url (url-generic-parse-url text))
+              ((string= (url-type url) "file")))
+    (ignore-errors
+      (cd-absolute
+       (concat (file-remote-p default-directory)
+               (url-unhex-string (url-filename url)))))))
 
 ;; Hyperlink handling (OSC 8)
 

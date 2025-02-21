@@ -1,6 +1,6 @@
 ;;; window.el --- GNU Emacs window commands aside from those written in C  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -1003,6 +1003,7 @@ and may be called only if no window on SIDE exists yet."
 	 ;; window and not make a new parent window unless needed.
 	 (window-combination-resize 'side)
 	 (window-combination-limit nil)
+	 (ignore-window-parameters t)
 	 (window (split-window-no-error next-to nil on-side))
          (alist (if (assq 'dedicated alist)
                     alist
@@ -3828,7 +3829,8 @@ ABSOLUTE is non-nil, PIXELWISE is implicitly non-nil too."
 	 (top-body
 	  (when body
 	    (+ (window-pixel-top window) border-width
-	       (window-header-line-height window))))
+	       (window-header-line-height window)
+	       (window-tab-line-height window))))
 	 (right (+ left (if pixelwise
 			    (window-pixel-width window)
 			  (window-total-width window))))
@@ -5223,7 +5225,12 @@ buffer by itself."
 	(cond
 	 ((window-minibuffer-p window))
 	 (kill-buffer-quit-windows
-	  (quit-restore-window window 'killing))
+	  ;; Try to preserve the current buffer set up by 'kill-buffer'
+	  ;; before running the hooks on 'kill-buffer-hook' (Bug#75949).
+	  (let ((current-buffer (current-buffer)))
+	    (quit-restore-window window 'killing)
+	    (when (buffer-live-p current-buffer)
+	      (set-buffer current-buffer))))
 	 (t
 	  (let ((dedicated-side (eq (window-dedicated-p window) 'side)))
             (when (or dedicated-side (not (window--delete window t 'kill)))
@@ -5511,7 +5518,7 @@ PARENT divided by their number plus 1."
       (setq sibling (window-next-sibling sibling)))
     (/ size (1+ number))))
 
-(defun split-window (&optional window size side pixelwise)
+(defun split-window (&optional window size side pixelwise refer)
   "Make a new window adjacent to WINDOW.
 WINDOW must be a valid window and defaults to the selected one.
 Return the new window which is always a live window.
@@ -5542,23 +5549,63 @@ For compatibility reasons, SIDE `up' and `down' are interpreted
 as `above' and `below'.  Any other non-nil value for SIDE is
 currently handled like t (or `right').
 
+As a rule, if WINDOW already forms a combination that matches the SIDE
+parameter and `window-combination-limit' is nil, reuse WINDOW's parent
+in the window tree as parent of the new window.  If WINDOW is in a
+combination that is orthogonal to the SIDE parameter or if
+`window-combination-limit' is non-nil, make a new parent window that
+replaces WINDOW in the window tree and make WINDOW and the new window
+its sole child windows.  This standard behavior can be overridden via
+the REFER argument.
+
 PIXELWISE, if non-nil, means to interpret SIZE pixelwise.
+
+If the optional fifth argument REFER is non-nil, it specifies a
+reference window used for setting up properties of the new window.
+REFER can be either a window or a cons cell of two windows.
+
+If REFER is a cons cell, its car has to specify a deleted, former live
+window - a window that has shown a buffer before - on the same frame as
+WINDOW.  That buffer must be still live.  The cdr has to specify a
+deleted window that was a parent window on the same frame as WINDOW
+before it was deleted.  In this case, rather then making new windows,
+replace WINDOW with the cdr of REFER in the window tree and make WINDOW
+and REFER's car its new child windows.  Buffer, start and point
+positions of REFER's car are set to the values they had immediately
+before REFER's car was deleted the last time.  Decorations and
+parameters remain unaltered from their values before REFER's car and cdr
+were deleted.
+
+Alternatively REFER may specify a deleted, former live window - a window
+that has shown a buffer before - on the same frame as WINDOW.  In this
+case do not make a new window but rather make REFER live again and
+insert it into the window tree at the position and with the sizes the
+new window would have been given.  Buffer, start and point positions of
+REFER are set to the values they had immediately before REFER was
+deleted the last time.  Decorations and parameters remain unaltered from
+their values before REFER was deleted.  Throw an error if REFER's buffer
+has been deleted after REFER itself was deleted.
+
+Otherwise REFER must specify a live window.  In this case, the new
+window will inherit properties like buffer, start and point position and
+some decorations from REFER.  If REFER is nil or omitted, then if WINDOW
+is live, any such properties are inherited from WINDOW.  If, however,
+WINDOW is an internal window, the new window will inherit these
+properties from the window selected on WINDOW's frame.
 
 If the variable `ignore-window-parameters' is non-nil or the
 `split-window' parameter of WINDOW equals t, do not process any
-parameters of WINDOW.  Otherwise, if the `split-window' parameter
-of WINDOW specifies a function, call that function with all three
-arguments and return the value returned by that function.
+parameters of WINDOW.  Otherwise, if the `split-window' parameter of
+WINDOW specifies a function, call that function with the three first
+arguments WINDOW, SIZE and SIDE and return the value returned by that
+function.
 
-Otherwise, if WINDOW is part of an atomic window, \"split\" the
-root of that atomic window.  The new window does not become a
-member of that atomic window.
+Otherwise, if WINDOW is part of an atomic window, \"split\" the root of
+that atomic window.  The new window does not become a member of that
+atomic window.
 
-If WINDOW is live, properties of the new window like margins and
-scrollbars are inherited from WINDOW.  If WINDOW is an internal
-window, these properties as well as the buffer displayed in the
-new window are inherited from the window selected on WINDOW's
-frame.  The selected window is not changed by this function."
+The selected window and the selected window on WINDOW's frame are not
+changed by this function."
   (setq window (window-normalize-window window))
   (let* ((side (cond
 		((not side) 'below)
@@ -5598,14 +5645,15 @@ frame.  The selected window is not changed by this function."
        ((and (window-parameter window 'window-atom)
 	     (setq atom-root (window-atom-root window))
 	     (not (eq atom-root window)))
-	(throw 'done (split-window atom-root size side pixelwise)))
+	(throw 'done (split-window atom-root size side pixelwise refer)))
        ;; If WINDOW's frame has a side window and WINDOW specifies the
        ;; frame's root window, split the frame's main window instead
        ;; (Bug#73627).
        ((and (eq window (frame-root-window frame))
+	     (not ignore-window-parameters)
 	     (window-with-parameter 'window-side nil frame))
 	(throw 'done (split-window (window-main-window frame)
-				   size side pixelwise)))
+				   size side pixelwise refer)))
        ;; If WINDOW is a side window or its first or last child is a
        ;; side window, throw an error unless `window-combination-resize'
        ;; equals 'side.
@@ -5644,8 +5692,8 @@ frame.  The selected window is not changed by this function."
 		   (window-combined-p window horizontal)))
 	     ;; 'old-pixel-size' is the current pixel size of WINDOW.
 	     (old-pixel-size (window-size window horizontal t))
-	     ;; 'new-size' is the specified or calculated size of the
-	     ;; new window.
+	     ;; 'new-pixel-size' is the specified or calculated size
+	     ;; of the new window.
 	     new-pixel-size new-parent new-normal)
 	(cond
 	 ((not pixel-size)
@@ -5766,8 +5814,9 @@ frame.  The selected window is not changed by this function."
 	   window (- (if new-parent 1.0 (window-normal-size window horizontal))
 		     new-normal)))
 
-	(let* ((new (split-window-internal window new-pixel-size side new-normal)))
-	  (window--pixel-to-total frame horizontal)
+	(let ((new (split-window-internal
+		    window new-pixel-size side new-normal refer)))
+          (window--pixel-to-total frame horizontal)
 	  ;; Assign window-side parameters, if any.
 	  (cond
 	   ((eq window-combination-resize 'side)
@@ -6262,8 +6311,7 @@ specific buffers."
             ,@(when next-buffers
                 `((next-buffers
                    . ,(if writable
-                          (mapcar (lambda (buffer) (buffer-name buffer))
-                                  next-buffers)
+                          (mapcar #'buffer-name next-buffers)
                         next-buffers))))
             ,@(when prev-buffers
                 `((prev-buffers
@@ -7347,20 +7395,64 @@ hold:
 		      (* 2 (max window-min-height
 				(if mode-line-format 2 1))))))))))
 
+(defcustom split-window-preferred-direction 'vertical
+  "The first direction tried when Emacs needs to split a window.
+This variable controls in which order `split-window-sensibly' will try to
+split the window.  That order specially matters when both dimensions of
+the frame are long enough to be split according to
+`split-width-threshold' and `split-height-threshold'.  If this is set to
+`vertical' (the default), `split-window-sensibly' tries to split
+vertically first and then horizontally.  If set to `horizontal' it does
+the opposite.  If set to `longest', the first direction tried
+depends on the frame shape: in landscape orientation it will be like
+`horizontal', but in portrait it will be like `vertical'.  Basically,
+the longest of the two dimension is split first.
+
+If both `split-width-threshold' and `split-height-threshold' cannot be
+satisfied, it will fallback to split vertically.
+
+See `split-window-preferred-function' for more control of the splitting
+strategy."
+  :type '(radio
+          (const :tag "Try to split vertically first"
+                 vertical)
+          (const :tag "Try to split horizontally first"
+                 horizontal)
+          (const :tag "Try to split along the longest edge first"
+                 longest))
+  :version "31.1"
+  :group 'windows)
+
+(defun window--try-vertical-split (window)
+  "Helper function for `split-window-sensibly'"
+  (when (window-splittable-p window)
+    (with-selected-window window
+      (split-window-below))))
+
+(defun window--try-horizontal-split (window)
+  "Helper function for `split-window-sensibly'"
+  (when (window-splittable-p window t)
+    (with-selected-window window
+      (split-window-right))))
+
 (defun split-window-sensibly (&optional window)
   "Split WINDOW in a way suitable for `display-buffer'.
-WINDOW defaults to the currently selected window.
-If `split-height-threshold' specifies an integer, WINDOW is at
-least `split-height-threshold' lines tall and can be split
-vertically, split WINDOW into two windows one above the other and
-return the lower window.  Otherwise, if `split-width-threshold'
-specifies an integer, WINDOW is at least `split-width-threshold'
-columns wide and can be split horizontally, split WINDOW into two
-windows side by side and return the window on the right.  If this
-can't be done either and WINDOW is the only window on its frame,
-try to split WINDOW vertically disregarding any value specified
-by `split-height-threshold'.  If that succeeds, return the lower
-window.  Return nil otherwise.
+The variable `split-window-preferred-direction' prescribes an order of
+directions in which Emacs should try to split WINDOW.  If that order
+mandates starting with a vertical split, and `split-height-threshold'
+specifies an integer that is at least as large a WINDOW's height, split
+WINDOW into two windows one below the other and return the lower one.
+If that order mandates starting with a horizontal split, and
+`split-width-threshold' specifies an integer that is at least as large
+as WINDOW's width, split WINDOW into two windows side by side and return
+the one on the right.
+
+In either case, if the first attempt to split WINDOW fails, try to split
+the window in the other direction in the same manner as described above.
+If that attempt fails too, and WINDOW is the only window on its frame,
+try splitting WINDOW into two windows, one below the other, disregarding
+the value of `split-height-threshold' and return the window on the
+bottom.
 
 By default `display-buffer' routines call this function to split
 the largest or least recently used window.  To change the default
@@ -7380,14 +7472,14 @@ Have a look at the function `window-splittable-p' if you want to
 know how `split-window-sensibly' determines whether WINDOW can be
 split."
   (let ((window (or window (selected-window))))
-    (or (and (window-splittable-p window)
-	     ;; Split window vertically.
-	     (with-selected-window window
-	       (split-window-below)))
-	(and (window-splittable-p window t)
-	     ;; Split window horizontally.
-	     (with-selected-window window
-	       (split-window-right)))
+    (or (if (or
+             (eql split-window-preferred-direction 'horizontal)
+             (and (eql split-window-preferred-direction 'longest)
+                  (> (frame-width) (frame-height))))
+            (or (window--try-horizontal-split window)
+                (window--try-vertical-split window))
+          (or (window--try-vertical-split window)
+              (window--try-horizontal-split window)))
 	(and
          ;; If WINDOW is the only usable window on its frame (it is
          ;; the only one or, not being the only one, all the other
@@ -7405,10 +7497,8 @@ split."
                                 frame nil 'nomini)
               t)))
 	 (not (window-minibuffer-p window))
-	 (let ((split-height-threshold 0))
-	   (when (window-splittable-p window)
-	     (with-selected-window window
-	       (split-window-below))))))))
+         (let ((split-height-threshold 0))
+           (window--try-vertical-split window))))))
 
 (defun window--try-to-split-window (window &optional alist)
   "Try to split WINDOW.
@@ -9115,35 +9205,6 @@ currently selected window; otherwise it will be displayed in
 another window."
   (pop-to-buffer buffer display-buffer--same-window-action norecord))
 
-(defcustom display-comint-buffer-action
-  (append display-buffer--same-window-action '((category . comint)))
-  "`display-buffer' action for displaying comint buffers."
-  :type display-buffer--action-custom-type
-  :risky t
-  :version "29.1"
-  :group 'windows
-  :group 'comint)
-
-(make-obsolete-variable
- 'display-comint-buffer-action
- "use a `(category . comint)' condition in `display-buffer-alist'."
- "30.1")
-
-(defcustom display-tex-shell-buffer-action '(display-buffer-in-previous-window
-                                             (inhibit-same-window . t)
-                                             (category . tex-shell))
-  "`display-buffer' action for displaying TeX shell buffers."
-  :type display-buffer--action-custom-type
-  :risky t
-  :version "29.1"
-  :group 'windows
-  :group 'tex-run)
-
-(make-obsolete-variable
- 'display-tex-shell-buffer-action
- "use a `(category . tex-shell)' condition in `display-buffer-alist'."
- "30.1")
-
 (defun read-buffer-to-switch (prompt)
   "Read the name of a buffer to switch to, prompting with PROMPT.
 Return the name of the buffer as a string.
@@ -9950,6 +10011,26 @@ for `fit-frame-to-buffer'."
             ;; Move frame down.
             (setq top top-margin)))))
       ;; Apply our changes.
+      (unless frame-resize-pixelwise
+	;; When 'frame-resize-pixelwise' is nil, a frame cannot be
+	;; necessarily fit completely even if the window's calculated
+	;; width and height are integral multiples of the frame's
+	;; character width and height.  The size hints Emacs produces
+	;; are inept to handle that when the combined sizes of the
+	;; frame's fringes, scroll bar and internal border are not an
+	;; integral multiple of the frame's character width (Bug#74866).
+	;; Consequently, the window manager will round sizes down and
+	;; this may cause lines getting wrapped.  To avoid that, round
+	;; sizes up here which will, however, leave a blank space at the
+	;; end of the longest line(s).
+	(setq text-minus-body-width
+	      (+ text-minus-body-width
+		 (- char-width
+		    (% text-minus-body-width char-width))))
+	(setq text-minus-body-height
+	      (+ text-minus-body-height
+		 (- char-height
+		    (% text-minus-body-height char-height)))))
       (setq text-width
             (if width
                 (+ width text-minus-body-width)

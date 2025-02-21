@@ -1,6 +1,6 @@
 ;;; help-fns.el --- Complex help functions -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2024 Free Software
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -649,7 +649,8 @@ the C sources, too."
          (lambda (entry level)
            (when (symbolp map)
              (setq map (symbol-function map)))
-           (when-let* ((elem (assq entry (cdr map))))
+           (when-let* ((elem (assq entry (cdr map)))
+                       (_ (proper-list-p elem)))
              (when (> level 0)
                (push sep string))
              (if (eq (nth 1 elem) 'menu-item)
@@ -1064,22 +1065,30 @@ TYPE indicates the namespace and is `fun' or `var'."
       rt)))
 
 (defun help-fns-short-filename (filename)
-  (let* ((short (help-fns--filename filename))
-         (prefixes (radix-tree-prefixes (help-fns--radix-tree load-path)
-                                        (file-name-directory short))))
-    (if (not prefixes)
-        ;; The file is not inside the `load-path'.
-        ;; FIXME: Here's the old code (too slow, bug#73766),
-        ;; which used to try and shorten it with "../" as well.
-        ;; (dolist (dir load-path)
-        ;;   (let ((rel (file-relative-name filename dir)))
-        ;;     (if (< (length rel) (length short))
-        ;;         (setq short rel)))
-        ;;   (let ((rel (file-relative-name abbrev dir)))
-        ;;     (if (< (length rel) (length short))
-        ;;         (setq short rel))))
-        short
-      (file-relative-name short (caar prefixes)))))
+  "Turn a full Elisp file name to one relative to `load-path'."
+  (if (not (file-name-absolute-p filename))
+      ;; This happens when FILENAME is a `src/*.c' returned by
+      ;; `help-C-file-name', in which case it's not searched through
+      ;; `load-path' anyway (bug#74504).
+      ;; Even if it came from elsewhere it's not clear to
+      ;; which directory it is relative.
+      filename
+    (let* ((short (help-fns--filename filename))
+           (prefixes (radix-tree-prefixes (help-fns--radix-tree load-path)
+                                          (file-name-directory short))))
+      (if (not prefixes)
+          ;; The file is not inside the `load-path'.
+          ;; FIXME: Here's the old code (too slow, bug#73766),
+          ;; which used to try and shorten it with "../" as well.
+          ;; (dolist (dir load-path)
+          ;;   (let ((rel (file-relative-name filename dir)))
+          ;;     (if (< (length rel) (length short))
+          ;;         (setq short rel)))
+          ;;   (let ((rel (file-relative-name abbrev dir)))
+          ;;     (if (< (length rel) (length short))
+          ;;         (setq short rel))))
+          short
+        (file-relative-name short (caar prefixes))))))
 
 (defun help-fns--analyze-function (function)
   ;; FIXME: Document/explain the differences between FUNCTION,
@@ -1437,21 +1446,29 @@ it is displayed along with the global value."
 			     (format-message "`%s'" rep)
 			   rep)))
                       (start (point)))
-		  (if (< (+ (length print-rep) (point) (- line-beg)) 68)
-		      (insert " " print-rep)
-		    (terpri)
-                    (let ((buf (current-buffer)))
-                      (with-temp-buffer
-                        (lisp-data-mode)
-                        (set-syntax-table emacs-lisp-mode-syntax-table)
-                        (insert print-rep)
-                        (pp-buffer)
-                        (font-lock-ensure)
-                        (let ((pp-buffer (current-buffer)))
-                          (with-current-buffer buf
-                            (insert-buffer-substring pp-buffer)))))
-                    ;; Remove trailing newline.
-                    (and (= (char-before) ?\n) (delete-char -1)))
+		 (let (beg)
+		   (if (< (+ (length print-rep) (point) (- line-beg)) 68)
+		       (progn
+		         (setq beg (1+ (point)))
+		         (insert " " print-rep))
+		     (terpri)
+                     (setq beg (point))
+                     (let ((buf (current-buffer)))
+                       (with-temp-buffer
+                         (lisp-data-mode)
+                         (insert print-rep)
+                         (pp-buffer)
+                         (font-lock-ensure)
+                         (let ((pp-buffer (current-buffer)))
+                           (with-current-buffer buf
+                             (insert-buffer-substring pp-buffer))))))
+                   ;; Remove trailing newline.
+                   (and (= (char-before) ?\n) (delete-char -1))
+                   ;; Put a `syntax-table' property on the data, as
+                   ;; a kind of poor man's multi-major-mode support here.
+                   (put-text-property beg (point)
+		                      'syntax-table
+		                      lisp-data-mode-syntax-table))
                   (help-fns--editable-variable start (point)
                                                variable val buffer)
 		  (let* ((sv (get variable 'standard-value))
@@ -1515,10 +1532,6 @@ it is displayed along with the global value."
 	    ;; If the value is large, move it to the end.
 	    (with-current-buffer standard-output
 	      (when (> (count-lines (point-min) (point-max)) 10)
-		;; Note that setting the syntax table like below
-		;; makes forward-sexp move over a `'s' at the end
-		;; of a symbol.
-		(set-syntax-table emacs-lisp-mode-syntax-table)
 		(goto-char val-start-pos)
 		(when (looking-at "value is") (replace-match ""))
 		(save-excursion
@@ -1585,6 +1598,8 @@ it is displayed along with the global value."
                 (format ";; Edit the `%s' variable." (nth 0 var))
                 (prin1-to-string (nth 1 var)))))
       (set (nth 0 var) (read str)))))
+
+(autoload 'shortdoc-help-fns-examples-function "shortdoc")
 
 (defun help-fns--run-describe-functions (functions &rest args)
   (with-current-buffer standard-output
@@ -1709,7 +1724,7 @@ variable.\n")))
       (insert "This variable is obsolete")
       (if (nth 2 obsolete)
           (insert (format " since %s" (nth 2 obsolete))))
-      (insert (cond ((stringp use) (concat "; " use))
+      (insert (cond ((stringp use) (substitute-command-keys (concat "; " use)))
 		    (use (format-message "; use `%s' instead."
                                          (car obsolete)))
 		    (t "."))

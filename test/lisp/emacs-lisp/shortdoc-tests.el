@@ -1,6 +1,6 @@
 ;;; shortdoc-tests.el --- tests for shortdoc.el   -*- lexical-binding: t -*-
 
-;; Copyright (C) 2021-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -56,7 +56,7 @@
 
 (ert-deftest shortdoc-all-groups-work ()
   "Test that all defined shortdoc groups display correctly."
-  (dolist (group (mapcar (lambda (x) (car x)) shortdoc--groups))
+  (dolist (group (mapcar #'car shortdoc--groups))
     (let ((buf-name (format "*Shortdoc %s*" group)) buf)
       (unwind-protect
           (progn

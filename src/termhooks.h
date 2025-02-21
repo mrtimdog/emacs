@@ -1,6 +1,6 @@
 /* Parameters and display hooks for terminal devices.
 
-Copyright (C) 1985-1986, 1993-1994, 2001-2024 Free Software Foundation,
+Copyright (C) 1985-1986, 1993-1994, 2001-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -291,6 +291,9 @@ enum event_kind
   , FILE_NOTIFY_EVENT
 #endif
 
+  /* Sleep/wake event.  */
+  , SLEEP_EVENT
+
   /* Pre-edit text was changed. */
   , PREEDIT_TEXT_EVENT
 
@@ -458,7 +461,7 @@ enum {
 
 #ifdef HAVE_GPM
 #include <gpm.h>
-extern int handle_one_term_event (struct tty_display_info *, Gpm_Event *);
+extern int handle_one_term_event (struct tty_display_info *, const Gpm_Event *);
 extern void term_mouse_moveto (int, int);
 
 /* The device for which we have enabled gpm support.  */
@@ -973,6 +976,9 @@ extern int cursorY (struct tty_display_info *);
 #define cursorX(t)  curX(t)
 #define cursorY(t)  curY(t)
 #endif
+
+void tty_hide_cursor (struct tty_display_info *tty);
+void tty_show_cursor (struct tty_display_info *tty);
 
 INLINE_HEADER_END
 

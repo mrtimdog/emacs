@@ -1,6 +1,6 @@
 ;;; yank-media.el --- Yanking images and HTML  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2021-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: utility
@@ -172,7 +172,7 @@ non-supported selection data types."
     data)))
 
 (defun yank-media--utf-16-p (data)
-  (and (zerop (mod (length data) 2))
+  (and (evenp (length data))
        (let ((stats (vector 0 0)))
          (dotimes (i (length data))
            (when (zerop (elt data i))

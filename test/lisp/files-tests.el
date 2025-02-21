@@ -1,6 +1,6 @@
 ;;; files-tests.el --- tests for files.el.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -1659,6 +1659,43 @@ The door of all subtleties!
   (should (equal (file-name-base "foo") "foo"))
   (should (equal (file-name-base "foo/bar") "bar")))
 
+(defun files-tests--check-mode (filename)
+  "Return the major mode found in `auto-mode-alist' for FILENAME."
+  (set-auto-mode--find-matching-alist-entry
+   auto-mode-alist
+   (concat "/home/jrhacker/" filename)
+   nil))
+
+(ert-deftest files-tests-auto-mode-alist ()
+  (should (eq (files-tests--check-mode ".gdbinit.in") #'gdb-script-mode))
+  (should (eq (files-tests--check-mode ".gdbinit") #'gdb-script-mode))
+  (should (eq (files-tests--check-mode "_gdbinit") #'gdb-script-mode)) ; for MS-DOS
+  (should (eq (files-tests--check-mode "gdb.ini") #'gdb-script-mode)) ; likewise
+  (should (eq (files-tests--check-mode "gdbinit") #'gdb-script-mode))
+  (should (eq (files-tests--check-mode "gdbinit.in") #'gdb-script-mode))
+  (should (eq (files-tests--check-mode "SOMETHING-gdbinit") #'gdb-script-mode))
+  (should (eq (files-tests--check-mode ".gdbinit.loader") #'gdb-script-mode))
+  (should-not (eq (files-tests--check-mode "gdbinit-history.exp") #'gdb-script-mode))
+  (should-not (eq (files-tests--check-mode "gdbinit.c") #'gdb-script-mode))
+  (should-not (eq (files-tests--check-mode "gdbinit.5") #'gdb-script-mode))
+  (should-not (eq (files-tests--check-mode ".gdbinit.py.in") #'gdb-script-mode)))
+
+(ert-deftest files-tests--bug75961 ()
+  (let* ((auto-mode-alist (cons '("\\.text\\'" text-mode t) auto-mode-alist))
+         (called-fun nil)
+         (fun (lambda () (setq called-fun t))))
+    (with-temp-buffer
+     (setq buffer-file-name "foo.text")
+     (normal-mode)
+     (should (derived-mode-p 'text-mode))
+     (add-hook 'text-mode-hook fun)
+     (setq buffer-file-name "foo.html.text")
+     (should (not called-fun))
+     (normal-mode)
+     (remove-hook 'text-mode-hook fun)
+     (should called-fun)
+     (should (derived-mode-p 'html-mode)))))
+
 (defvar sh-shell)
 
 (defun files-tests--check-shebang (shebang expected-mode &optional expected-dialect)
@@ -1952,7 +1989,7 @@ FN-TEST is the function to test: either `save-some-buffers' or
 `save-some-buffers-default-predicate' let-bound to a value
 specified inside ARGS-RESULTS.
 
-During the call to FN-TEST,`read-event' is overridden with a function that
+During the call to FN-TEST,`read-key' is overridden with a function that
 just returns `n' and `kill-emacs' is overridden to do nothing.
 
 ARGS-RESULTS is a list of elements (FN-ARGS CALLERS-DIR EXPECTED), where
@@ -1983,7 +2020,7 @@ CALLERS-DIR specifies the value to let-bind
             (setq nb-saved-buffers 0)
             (with-current-buffer (car buffers)
               (cl-letf
-                  (((symbol-function 'read-event)
+                  (((symbol-function 'read-key)
                     ;; Increase counter and answer 'n' when prompted
                     ;; to save a buffer.
                     (lambda (&rest _) (cl-incf nb-saved-buffers) ?n))

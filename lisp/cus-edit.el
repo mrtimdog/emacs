@@ -1,6 +1,6 @@
 ;;; cus-edit.el --- tools for customizing Emacs and Lisp packages -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1060,7 +1060,7 @@ even if it doesn't match the type.)
 
 \(fn [VARIABLE VALUE]...)"
   (declare (debug setq))
-  (unless (zerop (mod (length pairs) 2))
+  (unless (evenp (length pairs))
     (error "PAIRS must have an even number of variable/value members"))
   (let ((expr nil))
     (while pairs
@@ -1774,14 +1774,17 @@ or a regular expression.")
 	       'editable-field
 	       :size 40 :help-echo echo
 	       :action (lambda (widget &optional _event)
-                         (customize-apropos (split-string (widget-value widget)))))))
+                         (let ((value (widget-value widget)))
+                           (if (string= value "")
+                               (message "Empty search field")
+                             (customize-apropos (split-string value))))))))
 	(widget-insert " ")
 	(widget-create-child-and-convert
 	 search-widget 'push-button
 	 :tag " Search "
 	 :help-echo echo :action
 	 (lambda (widget &optional _event)
-	   (customize-apropos (split-string (widget-value (widget-get widget :parent))))))
+           (widget-apply (widget-get widget :parent) :action)))
 	(widget-insert "\n")))
 
     ;; The custom command buttons are also in the toolbar, so for a
@@ -5420,6 +5423,13 @@ Erase customizations; set options
 Entry to this mode calls the value of `Custom-mode-hook'
 if that value is non-nil."
   (use-local-map custom-mode-map)
+  (when (not (boundp 'tool-bar-map))
+    ;; setq-local will render tool-bar-map buffer local before the form
+    ;; is evaluated, but if tool-bar.el remains unloaded this blv will
+    ;; be unbound and consequently once tool-bar-local-item-from-menu is
+    ;; called and autoloads tool-bar.el, no binding will be created,
+    ;; causing it to signal.
+    (setq tool-bar-map (make-sparse-keymap)))
   (setq-local tool-bar-map
 	      (or custom-tool-bar-map
 		  ;; Set up `custom-tool-bar-map'.
@@ -5552,6 +5562,53 @@ its standard value."
   "A menu for `custom-icon' widgets.
 Used in `custom-icon-action' to show a menu to the user.")
 
+(defconst custom-icon--images-sub-type
+  '(list :format "%{%t%}:\n%v\n"
+         :tag "Images"
+         (const  :tag "" image)
+         (repeat :tag "Values"
+                 (string :tag "Image filename"))
+         (plist  :tag "Image attributes")))
+
+(defconst custom-icon--emojis-sub-type
+  '(list :format "%{%t%}:\n%v\n"
+         :tag "Colorful Emojis"
+         (const  :tag "" emoji)
+         (repeat :tag "Values"
+                 (string :tag "Emoji text"))
+         (plist  :tag "Emoji text properties")))
+
+(defconst custom-icon--symbols-sub-type
+  '(list :format "%{%t%}:\n%v\n"
+         :tag "Monochrome Symbols"
+         (const  :tag "" symbol)
+         (repeat :tag "Values"
+                 (string :tag "Symbol text"))
+         (plist  :tag "Symbol text properties")))
+
+(defconst custom-icon--texts-sub-type
+  '(list :format "%{%t%}:\n%v\n"
+         :tag "Texts Only"
+         (const  :tag "" text)
+         (repeat :tag "Values"
+                 (string :tag "Text"))
+         (plist  :tag "Text properties")))
+
+(defconst custom-icon--type
+  `(repeat :format ,(concat "%{%t%}"
+                            (propertize ":" 'display "")
+                            "\n\n%v%i\n")
+           :tag "Icon elements:
+- Only the first occurrence of a same element counts.
+- Missing elements will take their default value.
+- At least one element should be provided with a valid value."
+    (choice :void ,custom-icon--texts-sub-type
+            :extra-offset -3
+            ,custom-icon--images-sub-type
+            ,custom-icon--emojis-sub-type
+            ,custom-icon--symbols-sub-type
+            ,custom-icon--texts-sub-type)))
+
 (defun custom-icon-value-create (widget)
   "Here is where you edit the icon's specification."
   (custom-load-widget widget)
@@ -5562,13 +5619,7 @@ Used in `custom-icon-action' to show a menu to the user.")
 	 (form (widget-get widget :custom-form))
 	 (symbol (widget-get widget :value))
 	 (tag (widget-get widget :tag))
-	 (type '(repeat
-                 (list (choice (const :tag "Images" image)
-                               (const :tag "Colorful Emojis" emoji)
-                               (const :tag "Monochrome Symbols" symbol)
-                               (const :tag "Text Only" text))
-                       (repeat string)
-                       plist)))
+	 (type custom-icon--type)
 	 (prefix (widget-get widget :custom-prefix))
 	 (last (widget-get widget :custom-last))
 	 (style (widget-get widget :custom-style))

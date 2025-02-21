@@ -1,6 +1,6 @@
 ;;; autorevert-tests.el --- Tests of auto-revert   -*- lexical-binding: t -*-
 
-;; Copyright (C) 2015-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2025 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 
@@ -390,11 +390,17 @@ This expects `auto-revert--messages' to be bound by
                (should auto-revert-mode)
                (should
                 (string-match name (substring-no-properties (buffer-string))))
+               ;; If we don't sleep for a while, this test fails on
+               ;; MS-Windows.
+               (if (eq system-type 'windows-nt)
+                   (sleep-for 0.5))
 
                (ert-with-message-capture auto-revert--messages
                  ;; Delete file.
                  (delete-file tmpfile)
                  (auto-revert--wait-for-revert buf))
+               (if (eq system-type 'windows-nt)
+                   (sleep-for 1))
                ;; Check, that the buffer has been reverted.
                (should-not
                 (string-match name (substring-no-properties (buffer-string))))
@@ -680,6 +686,41 @@ This expects `auto-revert--messages' to be bound by
 
 (auto-revert--deftest-remote auto-revert-test07-auto-revert-several-buffers
   "Check autorevert for several buffers visiting the same remote file.")
+
+(ert-deftest auto-revert-test08-auto-revert-inhibit-auto-revert ()
+  "Check the power of `inhibit-auto-revert'."
+  ;; `auto-revert-buffers' runs every 5".  And we must wait, until the
+  ;; file has been reverted.
+  (with-auto-revert-test
+   (ert-with-temp-file tmpfile
+     (let ((times '(60 30 15))
+           buf)
+       (unwind-protect
+           (progn
+             (auto-revert-tests--write-file "any text" tmpfile (pop times))
+             (setq buf (find-file-noselect tmpfile))
+             (with-current-buffer buf
+               (ert-with-message-capture auto-revert--messages
+                 (inhibit-auto-revert
+                   (auto-revert-mode 1)
+                   (should auto-revert-mode)
+
+                   (auto-revert-tests--write-file "another text" tmpfile (pop times))
+                   ;; Check, that the buffer hasn't been reverted.
+                   (auto-revert--wait-for-revert buf)
+                   (should-not (string-match "another text" (buffer-string))))
+
+                 ;; Check, that the buffer has been reverted.
+                 (auto-revert--wait-for-revert buf)
+                 (should (string-match "another text" (buffer-string))))))
+
+         ;; Exit.
+         (ignore-errors
+           (with-current-buffer buf (set-buffer-modified-p nil))
+           (kill-buffer buf)))))))
+
+(auto-revert--deftest-remote auto-revert-test08-auto-revert-inhibit-auto-revert
+  "Check the power of `inhibit-auto-revert' on a remote file.")
 
 ;; Mark all tests as unstable on Cygwin (bug#49665).
 (when (eq system-type 'cygwin)

@@ -1,6 +1,6 @@
 /* Functions for the pure Gtk+-3.
 
-Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2020, 2022-2024 Free
+Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2020, 2022-2025 Free
 Software Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -1782,8 +1782,7 @@ Some window managers may refuse to restack windows.  */)
 #define PATH_FOR_CLASS_TYPE "/org/gnu/emacs/defaults-by-class/"
 #define PATH_PREFIX_FOR_NAME_TYPE "/org/gnu/emacs/defaults-by-name/"
 #define PATH_MAX_LEN \
-  (sizeof PATH_FOR_CLASS_TYPE > sizeof PATH_PREFIX_FOR_NAME_TYPE ? \
-   sizeof PATH_FOR_CLASS_TYPE : sizeof PATH_PREFIX_FOR_NAME_TYPE)
+  (max (sizeof PATH_FOR_CLASS_TYPE, sizeof PATH_PREFIX_FOR_NAME_TYPE))
 
 static inline int
 pgtk_is_lower_char (int c)
@@ -2849,7 +2848,7 @@ x_create_tip_frame (struct pgtk_display_info *dpyinfo, Lisp_Object parms, struct
   {
     Lisp_Object bg = Fframe_parameter (frame, Qbackground_color);
 
-    call2 (Qface_set_after_frame_default, frame, Qnil);
+    calln (Qface_set_after_frame_default, frame, Qnil);
 
     if (!EQ (bg, Fframe_parameter (frame, Qbackground_color)))
       {
@@ -2906,8 +2905,8 @@ compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx,
 
   /* Move the tooltip window where the mouse pointer is.  Resize and
      show it.  */
-  if ((!INTEGERP (left) && !INTEGERP (right))
-      || (!INTEGERP (top) && !INTEGERP (bottom)))
+  if ((!FIXNUMP (left) && !FIXNUMP (right))
+      || (!FIXNUMP (top) && !FIXNUMP (bottom)))
     {
       Lisp_Object frame, attributes, monitor, geometry;
       GdkSeat *seat =
@@ -2956,9 +2955,9 @@ compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx,
       max_y = pgtk_display_pixel_height (FRAME_DISPLAY_INFO (f));
     }
 
-  if (INTEGERP (top))
+  if (FIXNUMP (top))
     *root_y = XFIXNUM (top);
-  else if (INTEGERP (bottom))
+  else if (FIXNUMP (bottom))
     *root_y = XFIXNUM (bottom) - height;
   else if (*root_y + XFIXNUM (dy) <= min_y)
     *root_y = min_y;		/* Can happen for negative dy */
@@ -2972,9 +2971,9 @@ compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx,
     /* Put it on the top.  */
     *root_y = min_y;
 
-  if (INTEGERP (left))
+  if (FIXNUMP (left))
     *root_x = XFIXNUM (left);
-  else if (INTEGERP (right))
+  else if (FIXNUMP (right))
     *root_x = XFIXNUM (right) - width;
   else if (*root_x + XFIXNUM (dx) <= min_x)
     *root_x = 0;		/* Can happen for negative dx */
@@ -2996,7 +2995,7 @@ pgtk_hide_tip (bool delete)
 {
   if (!NILP (tip_timer))
     {
-      call1 (Qcancel_timer, tip_timer);
+      calln (Qcancel_timer, tip_timer);
       tip_timer = Qnil;
     }
 
@@ -3175,7 +3174,7 @@ Text larger than the specified size is clipped.  */)
 	  tip_f = XFRAME (tip_frame);
 	  if (!NILP (tip_timer))
 	    {
-	      call1 (Qcancel_timer, tip_timer);
+	      calln (Qcancel_timer, tip_timer);
 	      tip_timer = Qnil;
 	    }
 
@@ -3213,11 +3212,11 @@ Text larger than the specified size is clipped.  */)
 		    }
 		  else
 		    tip_last_parms =
-		      call2 (Qassq_delete_all, parm, tip_last_parms);
+		      calln (Qassq_delete_all, parm, tip_last_parms);
 		}
 	      else
 		tip_last_parms =
-		  call2 (Qassq_delete_all, parm, tip_last_parms);
+		  calln (Qassq_delete_all, parm, tip_last_parms);
 	    }
 
 	  /* Now check if every parameter in what is left of
@@ -3376,7 +3375,7 @@ Text larger than the specified size is clipped.  */)
 
  start_timer:
   /* Let the tip disappear after timeout seconds.  */
-  tip_timer = call3 (Qrun_at_time, timeout, Qnil, Qx_hide_tip);
+  tip_timer = calln (Qrun_at_time, timeout, Qnil, Qx_hide_tip);
 
   return unbind_to (count, Qnil);
 }
@@ -3668,10 +3667,7 @@ visible.  */)
   frames = Fnreverse (tmp);
 
   /* Make sure the current matrices are up-to-date.  */
-  specpdl_ref count = SPECPDL_INDEX ();
-  specbind (Qredisplay_dont_pause, Qt);
   redisplay_preserve_echo_area (32);
-  unbind_to (count, Qnil);
 
   block_input ();
   xg_print_frames_dialog (frames);
@@ -3822,6 +3818,44 @@ DEFUN ("x-gtk-debug", Fx_gtk_debug, Sx_gtk_debug, 1, 1, 0,
   return NILP (enable) ? Qnil : Qt;
 }
 
+static void
+unwind_gerror_ptr (void* data)
+{
+  GError* error = *(GError**)data;
+  if (error)
+    g_error_free (error);
+}
+
+DEFUN ("x-gtk-launch-uri", Fx_gtk_launch_uri, Sx_gtk_launch_uri, 2, 2, 0,
+       doc: /* launch URI */)
+  (Lisp_Object frame, Lisp_Object uri)
+{
+  CHECK_FRAME (frame);
+
+  if (!FRAME_LIVE_P (XFRAME (frame)) ||
+      !FRAME_PGTK_P (XFRAME (frame)) ||
+      !FRAME_GTK_OUTER_WIDGET (XFRAME (frame)))
+    error ("GTK URI launch not available for this frame");
+
+  CHECK_STRING (uri);
+  guint32 timestamp = gtk_get_current_event_time ();
+
+  GError *err = NULL;
+  specpdl_ref count = SPECPDL_INDEX ();
+
+  record_unwind_protect_ptr (unwind_gerror_ptr, &err);
+
+  gtk_show_uri_on_window (GTK_WINDOW (FRAME_GTK_OUTER_WIDGET (XFRAME (frame))),
+			  SSDATA (uri),
+			  timestamp,
+			  &err);
+
+  if (err)
+    error ("Failed to launch URI via GTK: %s", err->message);
+
+  return unbind_to (count, Qnil);
+}
+
 void
 syms_of_pgtkfns (void)
 {
@@ -3847,7 +3881,7 @@ syms_of_pgtkfns (void)
 				 GTK_MAJOR_VERSION, GTK_MINOR_VERSION,
 				 GTK_MICRO_VERSION);
     int len = strlen (ver);
-    Vgtk_version_string = make_pure_string (ver, len, len, false);
+    Vgtk_version_string = make_specified_string (ver, len, len, false);
     g_free (ver);
   }
 
@@ -3861,7 +3895,7 @@ syms_of_pgtkfns (void)
 				 CAIRO_VERSION_MAJOR, CAIRO_VERSION_MINOR,
 				 CAIRO_VERSION_MICRO);
     int len = strlen (ver);
-    Vcairo_version_string = make_pure_string (ver, len, len, false);
+    Vcairo_version_string = make_specified_string (ver, len, len, false);
     g_free (ver);
   }
 
@@ -3893,6 +3927,7 @@ syms_of_pgtkfns (void)
   defsubr (&Sx_close_connection);
   defsubr (&Sx_display_list);
   defsubr (&Sx_gtk_debug);
+  defsubr (&Sx_gtk_launch_uri);
 
   defsubr (&Sx_show_tip);
   defsubr (&Sx_hide_tip);

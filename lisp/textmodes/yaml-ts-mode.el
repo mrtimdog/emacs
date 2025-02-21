@@ -1,6 +1,6 @@
 ;;; yaml-ts-mode.el --- tree-sitter support for YAML  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Randy Taylor <dev@rjt.dev>
 ;; Maintainer : Randy Taylor <dev@rjt.dev>
@@ -33,6 +33,7 @@
 (declare-function treesit-node-start "treesit.c")
 (declare-function treesit-node-end "treesit.c")
 (declare-function treesit-node-type "treesit.c")
+(declare-function treesit-node-child-by-field-name "treesit.c")
 
 (defvar yaml-ts-mode--syntax-table
   (let ((table (make-syntax-table)))
@@ -141,6 +142,20 @@ boundaries.  JUSTIFY is passed to `fill-paragraph'."
           (fill-region start-marker end justify))
         t))))
 
+(defun yaml-ts-mode--defun-name (node)
+  "Return the defun name of NODE.
+Return nil if there is no name or if NODE is not a defun node."
+  (when (equal (treesit-node-type node) "block_mapping_pair")
+    (treesit-node-text (treesit-node-child-by-field-name
+                        node "key")
+                       t)))
+
+(defun yaml-ts-mode--outline-predicate (node)
+  "Limit outlines to top-level mappings."
+  (let ((regexp (rx (or "block_mapping_pair" "block_sequence_item"))))
+    (when (string-match-p regexp (treesit-node-type node))
+      (not (treesit-parent-until node regexp)))))
+
 ;;;###autoload
 (define-derived-mode yaml-ts-mode text-mode "YAML"
   "Major mode for editing YAML, powered by tree-sitter."
@@ -167,7 +182,32 @@ boundaries.  JUSTIFY is passed to `fill-paragraph'."
 
     (setq-local fill-paragraph-function #'yaml-ts-mode--fill-paragraph)
 
-    (treesit-major-mode-setup)))
+    ;; Navigation.
+    (setq-local treesit-defun-type-regexp "block_mapping_pair")
+    (setq-local treesit-defun-name-function #'yaml-ts-mode--defun-name)
+    (setq-local treesit-defun-tactic 'top-level)
+
+    (setq-local treesit-thing-settings
+                `((yaml
+                   (list ,(rx (or "block_mapping_pair" "flow_sequence")))
+                   (sentence ,"block_mapping_pair"))))
+
+    ;; Imenu.
+    (setq-local treesit-simple-imenu-settings
+                '((nil "\\`block_mapping_pair\\'" nil nil)))
+
+    ;; Outline minor mode.
+    (setq-local treesit-outline-predicate #'yaml-ts-mode--outline-predicate)
+
+    (treesit-major-mode-setup)
+
+    ;; Use the `list' thing defined above to navigate only lists
+    ;; with `C-M-n', `C-M-p', `C-M-u', `C-M-d', but not sexps
+    ;; with `C-M-f', `C-M-b' neither adapt to 'show-paren-mode'
+    ;; that is problematic in languages without explicit
+    ;; opening/closing nodes.
+    (kill-local-variable 'forward-sexp-function)
+    (kill-local-variable 'show-paren-data-function)))
 
 (derived-mode-add-parents 'yaml-ts-mode '(yaml-mode))
 

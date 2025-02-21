@@ -1,6 +1,6 @@
 ;;; erc-fill.el --- Filling IRC messages in various ways  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2004, 2006-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2004, 2006-2025 Free Software Foundation, Inc.
 
 ;; Author: Andreas Fuchs <asf@void.at>
 ;;         Mario Lang <mlang@delysid.org>
@@ -567,7 +567,7 @@ via `erc-fill-wrap-mode-hook'."
                 #'erc-fill--wrap-merged-button-p t)
    (remove-hook 'erc-stamp--insert-date-hook
                 #'erc-fill--wrap-unmerge-on-date-stamp t))
-  'local)
+  localp)
 
 (defvar-local erc-fill--wrap-length-function nil
   "Function to determine length of overhanging characters.

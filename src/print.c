@@ -1,6 +1,6 @@
 /* Lisp object printing and output streams.
 
-Copyright (C) 1985-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -306,7 +306,7 @@ static void
 printchar (unsigned int ch, Lisp_Object fun)
 {
   if (!NILP (fun) && !EQ (fun, Qt))
-    call1 (fun, make_fixnum (ch));
+    calln (fun, make_fixnum (ch));
   else
     {
       unsigned char str[MAX_MULTIBYTE_LENGTH];
@@ -1680,8 +1680,7 @@ print_vectorlike_unreadable (Lisp_Object obj, Lisp_Object printcharfun,
 	  record_unwind_current_buffer ();
 	  set_buffer_internal (XBUFFER (Vprint__unreadable_callback_buffer));
 	}
-      Lisp_Object result = CALLN (Ffuncall, func, obj,
-				  escapeflag? Qt: Qnil);
+      Lisp_Object result = calln (func, obj, escapeflag? Qt: Qnil);
       unbind_to (count, Qnil);
 
       if (!NILP (result))
@@ -2292,7 +2291,8 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 
   switch (XTYPE (obj))
     {
-    case_Lisp_Int:
+    case Lisp_Int0:
+    case Lisp_Int1:
       {
         EMACS_INT i = XFIXNUM (obj);
         char escaped_name;
@@ -2604,9 +2604,6 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 		print_object (hash_table_weakness_symbol (h->weakness),
 			      printcharfun, escapeflag);
 	      }
-
-	    if (h->purecopy)
-	      print_c_string (" purecopy t", printcharfun);
 
 	    ptrdiff_t size = h->count;
 	    if (size > 0)

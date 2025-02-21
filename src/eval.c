@@ -1,6 +1,6 @@
 /* Evaluator for GNU Emacs Lisp interpreter.
 
-Copyright (C) 1985-1987, 1993-1995, 1999-2024 Free Software Foundation,
+Copyright (C) 1985-1987, 1993-1995, 1999-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -613,7 +613,7 @@ usage: (function ARG)  */)
         return Fmake_interpreted_closure
             (args, cdr, Vinternal_interpreter_environment, docstring, iform);
       else
-        return call5 (Vinternal_make_interpreted_closure_function,
+        return calln (Vinternal_make_interpreted_closure_function,
                       args, cdr, Vinternal_interpreter_environment,
                       docstring, iform);
     }
@@ -690,7 +690,7 @@ signal a `cyclic-variable-indirection' error.  */)
 			      " to `%s'");
       formatted = CALLN (Fformat_message, message,
 			 new_alias, base_variable);
-      call2 (Qdisplay_warning,
+      calln (Qdisplay_warning,
 	     list3 (Qdefvaralias, Qlosing_value, new_alias),
 	     formatted);
     }
@@ -817,8 +817,6 @@ value.  */)
   XSYMBOL (symbol)->u.s.declared_special = true;
   if (!NILP (doc))
     {
-      if (!NILP (Vpurify_flag))
-	doc = Fpurecopy (doc);
       Fput (symbol, Qvariable_documentation, doc);
     }
   LOADHIST_ATTACH (symbol);
@@ -967,8 +965,6 @@ More specifically, behaves like (defconst SYM 'INITVALUE DOCSTRING).  */)
   CHECK_SYMBOL (sym);
   Lisp_Object tem = initvalue;
   Finternal__define_uninitialized_variable (sym, docstring);
-  if (!NILP (Vpurify_flag))
-    tem = Fpurecopy (tem);
   Fset_default (sym, tem);      /* FIXME: set-default-toplevel-value? */
   Fput (sym, Qrisky_local_variable, Qt); /* FIXME: Why?  */
   return sym;
@@ -1169,7 +1165,7 @@ is not displayed.  */)
 				       xstrdup (SSDATA (message)));
   record_unwind_protect_ptr (with_delayed_message_cancel, timer);
 
-  Lisp_Object result = CALLN (Ffuncall, function);
+  Lisp_Object result = calln (function);
 
   return unbind_to (count, result);
 }
@@ -1482,7 +1478,7 @@ Lisp_Object
 internal_lisp_condition_case (Lisp_Object var, Lisp_Object bodyform,
 			      Lisp_Object handlers)
 {
-  struct handler *volatile oldhandlerlist = handlerlist;
+  struct handler *oldhandlerlist = handlerlist;
 
   /* The number of non-success handlers, plus 1 for a sentinel.  */
   ptrdiff_t clausenb = 1;
@@ -1547,12 +1543,11 @@ internal_lisp_condition_case (Lisp_Object var, Lisp_Object bodyform,
       if (!CONSP (condition))
 	condition = list1 (condition);
       struct handler *c = push_handler (condition, CONDITION_CASE);
-      Lisp_Object volatile *clauses_volatile = clauses;
       if (sys_setjmp (c->jmp))
 	{
 	  var = var_volatile;
 	  val = handlerlist->val;
-	  Lisp_Object volatile *chosen_clause = clauses_volatile;
+	  Lisp_Object volatile *chosen_clause = clauses;
 	  struct handler *oldh = oldhandlerlist;
 	  for (struct handler *h = handlerlist->next; h != oldh; h = h->next)
 	    chosen_clause++;
@@ -1860,7 +1855,7 @@ signal_or_quit (Lisp_Object error_symbol, Lisp_Object data, bool continuable)
       /* FIXME: 'handler-bind' makes `signal-hook-function' obsolete?  */
       /* FIXME: Here we still "split" the error object
          into its error-symbol and its error-data?  */
-      call2 (Vsignal_hook_function, error_symbol, data);
+      calln (Vsignal_hook_function, error_symbol, data);
       unbind_to (count, Qnil);
     }
 
@@ -1900,7 +1895,7 @@ signal_or_quit (Lisp_Object error_symbol, Lisp_Object data, bool continuable)
 	        max_ensure_room (20);
 	        push_handler (make_fixnum (skip + h->bytecode_dest),
 	                      SKIP_CONDITIONS);
-	        call1 (h->val, error);
+	        calln (h->val, error);
 	        unbind_to (count, Qnil);
 	        pop_handler ();
 	      }
@@ -1992,6 +1987,8 @@ signal_error (const char *s, Lisp_Object arg)
   xsignal (Qerror, Fcons (build_string (s), arg));
 }
 
+/* Simplified version of 'define-error'.  */
+
 void
 define_error (Lisp_Object name, const char *message, Lisp_Object parent)
 {
@@ -2001,8 +1998,8 @@ define_error (Lisp_Object name, const char *message, Lisp_Object parent)
   eassert (CONSP (parent_conditions));
   eassert (!NILP (Fmemq (parent, parent_conditions)));
   eassert (NILP (Fmemq (name, parent_conditions)));
-  Fput (name, Qerror_conditions, pure_cons (name, parent_conditions));
-  Fput (name, Qerror_message, build_pure_c_string (message));
+  Fput (name, Qerror_conditions, Fcons (name, parent_conditions));
+  Fput (name, Qerror_message, build_string (message));
 }
 
 /* Use this for arithmetic overflow, e.g., when an integer result is
@@ -2281,7 +2278,7 @@ then strings and vectors are not accepted.  */)
      a type-specific interactive-form.  */
   if (genfun)
     {
-      Lisp_Object iform = call1 (Qinteractive_form, fun);
+      Lisp_Object iform = calln (Qinteractive_form, fun);
       return NILP (iform) ? Qnil : Qt;
     }
   else
@@ -2318,12 +2315,6 @@ this does nothing and returns nil.  */)
       && !AUTOLOADP (XSYMBOL (function)->u.s.function))
     return Qnil;
 
-  if (!NILP (Vpurify_flag) && BASE_EQ (docstring, make_fixnum (0)))
-    /* `read1' in lread.c has found the docstring starting with "\
-       and assumed the docstring will be provided by Snarf-documentation, so it
-       passed us 0 instead.  But that leads to accidental sharing in purecopy's
-       hash-consing, so we use a (hopefully) unique integer instead.  */
-    docstring = make_ufixnum (XHASH (function));
   return Fdefalias (function,
 		    list5 (Qautoload, file, docstring, interactive, type),
 		    Qnil);
@@ -2964,7 +2955,7 @@ run_hook_with_args_2 (Lisp_Object hook, Lisp_Object arg1, Lisp_Object arg2)
 Lisp_Object
 apply1 (Lisp_Object fn, Lisp_Object arg)
 {
-  return NILP (arg) ? Ffuncall (1, &fn) : CALLN (Fapply, fn, arg);
+  return NILP (arg) ? calln (fn) : CALLN (Fapply, fn, arg);
 }
 
 DEFUN ("functionp", Ffunctionp, Sfunctionp, 1, 1, 0,
@@ -3887,11 +3878,11 @@ backtrace_frame_apply (Lisp_Object function, union specbinding *pdl)
     flags = list2 (QCdebug_on_exit, Qt);
 
   if (backtrace_nargs (pdl) == UNEVALLED)
-    return call4 (function, Qnil, backtrace_function (pdl), *backtrace_args (pdl), flags);
+    return calln (function, Qnil, backtrace_function (pdl), *backtrace_args (pdl), flags);
   else
     {
       Lisp_Object tem = Flist (backtrace_nargs (pdl), backtrace_args (pdl));
-      return call4 (function, Qt, backtrace_function (pdl), tem, flags);
+      return calln (function, Qt, backtrace_function (pdl), tem, flags);
     }
 }
 
@@ -4477,7 +4468,7 @@ alist of active lexical bindings.  */);
      also use something like Fcons (Qnil, Qnil), but json.c treats any
      cons cell as error data, so use an uninterned symbol instead.  */
   Qcatch_all_memory_full
-    = Fmake_symbol (build_pure_c_string ("catch-all-memory-full"));
+    = Fmake_symbol (build_string ("catch-all-memory-full"));
 
   staticpro (&list_of_t);
   list_of_t = list1 (Qt);
