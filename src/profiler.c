@@ -333,7 +333,7 @@ add_sample (struct profiler_log *plog, EMACS_INT count)
        harden the hash-table code, but it doesn't seem worth the
        effort.  */
     plog->gc_count = saturated_add (plog->gc_count, count);
-  else
+  else if (! profiler_inhibit_samples)
     record_backtrace (plog, count);
 }
 
@@ -692,6 +692,9 @@ mark_profiler (void)
 void
 syms_of_profiler (void)
 {
+  DEFVAR_BOOL ("profiler-inhibit-samples", profiler_inhibit_samples,
+	      doc: /* Inhibit adding samples.  */);
+  profiler_inhibit_samples = 0;
   DEFVAR_INT ("profiler-max-stack-depth", profiler_max_stack_depth,
 	      doc: /* Number of elements from the call-stack recorded in the log.  */);
   profiler_max_stack_depth = 16;
