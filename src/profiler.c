@@ -693,7 +693,7 @@ void
 syms_of_profiler (void)
 {
   DEFVAR_BOOL ("profiler-inhibit-samples", profiler_inhibit_samples,
-	      doc: /* Inhibit adding samples.  */);
+	      doc: /* Inhibit adding samples during profiling.  */);
   profiler_inhibit_samples = 0;
   DEFVAR_INT ("profiler-max-stack-depth", profiler_max_stack_depth,
 	      doc: /* Number of elements from the call-stack recorded in the log.  */);
