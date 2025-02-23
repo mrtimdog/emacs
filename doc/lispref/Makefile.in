@@ -46,8 +46,6 @@ MKDIR_P = @MKDIR_P@
 
 GZIP_PROG = @GZIP_PROG@
 
-HTML_OPTS = --no-split --html
-
 # Options used only when making info output.
 INFO_OPTS= --no-split
 
@@ -67,7 +65,7 @@ ENVADD = \
   MAKEINFO="$(MAKEINFO) $(MAKEINFO_OPTS)"
 
 DVI_TARGETS = elisp.dvi
-HTML_TARGETS = elisp.html
+HTML_TARGETS = elisp.html elisp_html
 PDF_TARGETS = elisp.pdf
 PS_TARGETS = elisp.ps
 
@@ -160,7 +158,10 @@ elisp.dvi: $(srcs)
 	$(ENVADD) $(TEXI2DVI) $<
 
 elisp.html: $(srcs)
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) $(HTML_OPTS) -o $@ $<
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $<
+
+elisp_html: $(srcs)
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $<
 
 elisp.pdf: $(srcs)
 	$(ENVADD) $(TEXI2PDF) $<
@@ -177,7 +178,7 @@ mostlyclean:
 	rm -f elisp[12]* vol[12].tmp
 
 clean: mostlyclean
-	rm -f $(DVI_TARGETS) $(HTML_TARGETS) $(PDF_TARGETS) $(PS_TARGETS)
+	rm -rf $(DVI_TARGETS) $(HTML_TARGETS) $(PDF_TARGETS) $(PS_TARGETS)
 	rm -f vol[12].dvi vol[12].pdf vol[12].ps
 
 distclean: clean
@@ -200,7 +201,8 @@ install-dvi: dvi
 	$(INSTALL_DATA) $(DVI_TARGETS) "$(DESTDIR)$(dvidir)"
 install-html: html
 	umask 022; $(MKDIR_P) "$(DESTDIR)$(htmldir)"
-	$(INSTALL_DATA) $(HTML_TARGETS) "$(DESTDIR)$(htmldir)"
+	find $(HTML_TARGETS) -type f -exec \
+		$(INSTALL_DATA) -DT "{}" "$(DESTDIR)$(htmldir)/{}" \;
 install-pdf: pdf
 	 umask 022;$(MKDIR_P) "$(DESTDIR)$(pdfdir)"
 	$(INSTALL_DATA) $(PDF_TARGETS) "$(DESTDIR)$(pdfdir)"

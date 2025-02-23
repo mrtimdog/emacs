@@ -42,10 +42,8 @@ MKDIR_P = @MKDIR_P@
 
 GZIP_PROG = @GZIP_PROG@
 
-HTML_OPTS = --no-split --html
-
 # Options used only when making info output.
-INFO_OPTS= --no-split
+INFO_OPTS=
 
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -63,7 +61,7 @@ ENVADD = \
   MAKEINFO="$(MAKEINFO) $(MAKEINFO_OPTS)"
 
 DVI_TARGETS = emacs-lisp-intro.dvi
-HTML_TARGETS = eintr.html
+HTML_TARGETS = eintr.html eintr_html
 PDF_TARGETS = emacs-lisp-intro.pdf
 PS_TARGETS = emacs-lisp-intro.ps
 
@@ -96,7 +94,10 @@ emacs-lisp-intro.pdf: ${srcs}
 	$(ENVADD) $(TEXI2PDF) $<
 
 eintr.html: ${srcs}
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) $(HTML_OPTS) -o $@ $<
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $<
+
+eintr_html: ${srcs}
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $<
 
 emacs-lisp-intro.ps: emacs-lisp-intro.dvi
 	$(DVIPS) -o $@ $<
@@ -108,7 +109,7 @@ mostlyclean:
 	  ./*.op ./*.ops ./*.pg ./*.pgs ./*.tp ./*.tps ./*.vr ./*.vrs
 
 clean: mostlyclean
-	rm -f $(DVI_TARGETS) $(HTML_TARGETS) $(PDF_TARGETS) $(PS_TARGETS)
+	rm -rf $(DVI_TARGETS) $(HTML_TARGETS) $(PDF_TARGETS) $(PS_TARGETS)
 
 distclean: clean
 	rm -f Makefile
@@ -128,7 +129,8 @@ install-dvi: dvi
 	$(INSTALL_DATA) $(DVI_TARGETS) "$(DESTDIR)$(dvidir)"
 install-html: html
 	umask 022; $(MKDIR_P) "$(DESTDIR)$(htmldir)"
-	$(INSTALL_DATA) $(HTML_TARGETS) "$(DESTDIR)$(htmldir)"
+	find $(HTML_TARGETS) -type f -exec \
+		$(INSTALL_DATA) -DT "{}" "$(DESTDIR)$(htmldir)/{}" \;
 install-pdf: pdf
 	 umask 022;$(MKDIR_P) "$(DESTDIR)$(pdfdir)"
 	$(INSTALL_DATA) $(PDF_TARGETS) "$(DESTDIR)$(pdfdir)"
