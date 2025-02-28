@@ -537,7 +537,11 @@ ARGS is a list of the first N arguments to pass to FUN.
 The result is a new function which does the same as FUN, except that
 the first N arguments are fixed at the values with which this function
 was called."
-  (declare (side-effect-free error-free))
+  (declare (side-effect-free error-free)
+           (compiler-macro
+            (lambda (_)
+              `(lambda (&rest args2)
+                 ,`(apply ,fun ,@args args2)))))
   (lambda (&rest args2)
     (apply fun (append args args2))))
 
@@ -3108,7 +3112,7 @@ This is to `put' what `defalias' is to `fset'."
 (declare-function comp-el-to-eln-rel-filename "comp.c")
 
 (defun locate-eln-file (eln-file)
-  "Locate a natively-compiled ELN-FILE by searching its load path.
+  "Locate a native-compiled ELN-FILE by searching its load path.
 This function looks in directories named by `native-comp-eln-load-path'."
   (declare (important-return-value t))
   (or (locate-file-internal (concat comp-native-version-dir "/" eln-file)
