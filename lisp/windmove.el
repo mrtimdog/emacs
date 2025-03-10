@@ -385,11 +385,13 @@ the second invocation will override the `no-other-window' property.
 CALLING-COMMAND is the command that called this function, used to detect
 repeated commands."
   (let* ((repeated-command
-          (and calling-command (eq last-command calling-command)))
+          (and calling-command
+               windmove-allow-repeated-command-override
+               (eq last-command
+                   (intern (format "%s-override" calling-command)))))
          (other-window (windmove-find-other-window dir arg window)))
 
-    (when (and (null other-window)
-               repeated-command windmove-allow-repeated-command-override)
+    (when (and (null other-window) repeated-command)
       (setf other-window (window-in-direction dir window t arg windmove-wrap-around t)))
 
     ;; Create window if needed
@@ -411,6 +413,11 @@ repeated commands."
                windmove-allow-repeated-command-override)
       (let ((test-window (window-in-direction dir window t arg windmove-wrap-around t)))
         (when test-window
+          ;; Remember that we stopped at a boundary so we don't override
+          ;; a no-other-window before telling the user about it during a
+          ;; multi-command movement sequence.
+          (setf this-command
+                (intern (format "%s-override" calling-command)))
           (user-error "No window %s (repeat to override)" dir))))
 
     (cond ((null other-window)
@@ -435,7 +442,11 @@ With no prefix argument, or with prefix argument equal to zero,
 it is relative to the top edge (for positive ARG) or the bottom edge
 \(for negative ARG) of the current window.
 If no window is at the desired location, an error is signaled
-unless `windmove-create-window' is non-nil and a new window is created."
+unless `windmove-create-window' is non-nil and a new window is created.
+
+If `windmove-allow-repeated-command-override' is true and this commnad
+stopped because it wouldn't move into a window marked with
+`no-other-window', repeating the command will move into that window."
   (interactive "P\np")
   (windmove-do-window-select
    'left (and arg (prefix-numeric-value arg)) nil
@@ -451,10 +462,9 @@ negative ARG) of the current window.
 If no window is at the desired location, an error is signaled
 unless `windmove-create-window' is non-nil and a new window is created.
 
-When this command is used twice in quick succession (within
-`windmove-double-command-timeout' seconds), the second invocation
-will override the `no-other-window' property of windows, allowing
-you to move to windows that would normally be skipped."
+If `windmove-allow-repeated-command-override' is true and this commnad
+stopped because it wouldn't move into a window marked with
+`no-other-window', repeating the command will move into that window."
   (interactive "P\np")
   (windmove-do-window-select
    'up (and arg (prefix-numeric-value arg)) nil
@@ -470,9 +480,9 @@ bottom edge (for negative ARG) of the current window.
 If no window is at the desired location, an error is signaled
 unless `windmove-create-window' is non-nil and a new window is created.
 
-If `windmove-double-command-timeout' is set and a window exists in the
-requested direction that is marked with the no-other-window property, you
-can press this command twice in quick succession to override that property."
+If `windmove-allow-repeated-command-override' is true and this commnad
+stopped because it wouldn't move into a window marked with
+`no-other-window', repeating the command will move into that window."
   (interactive "P\np")
   (windmove-do-window-select
    'right (and arg (prefix-numeric-value arg)) nil
@@ -486,7 +496,11 @@ With no prefix argument, or with prefix argument equal to zero,
 it is relative to the left edge (for positive ARG) or the right edge
 \(for negative ARG) of the current window.
 If no window is at the desired location, an error is signaled
-unless `windmove-create-window' is non-nil and a new window is created."
+unless `windmove-create-window' is non-nil and a new window is created.
+
+If `windmove-allow-repeated-command-override' is true and this commnad
+stopped because it wouldn't move into a window marked with
+`no-other-window', repeating the command will move into that window."
   (interactive "P\np")
   (windmove-do-window-select
    'down (and arg (prefix-numeric-value arg)) nil
