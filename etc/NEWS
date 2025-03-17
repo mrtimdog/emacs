@@ -980,6 +980,11 @@ are highlighted like other comments.  When non-nil, Doxygen comment
 blocks are syntax-highlighted if the Doxygen grammar library is
 available.
 
+---
+*** New user option 'java-ts-mode-method-chaining-indent-offset'
+Now method chaining is indented by 8 spaces rather than 4, and this
+variable controls how much is indented for method chaining.
+
 ** Emacs Lisp mode
 
 ---
@@ -1503,7 +1508,7 @@ a file, that file being choosen by the user through the minibuffer.
 *** New prefix map for remember commands.
 Meant to be given a global binding convenient to the user.  Example:
 
-    (keymap-global-set "C-c M-r" 'remember-prefix-map)
+    (keymap-global-set "C-c r" 'remember-prefix-map)
 
 ** Speedbar
 
