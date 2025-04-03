@@ -25685,7 +25685,7 @@ display_line (struct it *it, int cursor_vpos)
 
       /* Now, get the metrics of what we want to display.  This also
 	 generates glyphs in `row' (which is IT->glyph_row).  */
-      n_glyphs_before = row->used[TEXT_AREA];
+      n_glyphs_before = row->used[it->area];
       x = it->current_x;
 
       /* Remember the line height so far in case the next element doesn't
@@ -25732,6 +25732,7 @@ display_line (struct it *it, int cursor_vpos)
 	 the next one.  */
       if (it->area != TEXT_AREA)
 	{
+	  enum glyph_row_area area = it->area;
 	  row->ascent = max (row->ascent, it->max_ascent);
 	  row->height = max (row->height, it->max_ascent + it->max_descent);
 	  row->phys_ascent = max (row->phys_ascent, it->max_phys_ascent);
@@ -25740,6 +25741,17 @@ display_line (struct it *it, int cursor_vpos)
 	  row->extra_line_spacing = max (row->extra_line_spacing,
 					 it->max_extra_line_spacing);
 	  set_iterator_to_next (it, true);
+	  /* TTY frames cannot clip character glyphs that extend past the
+	     end of the marginal areas, so we must do that here "by hand".  */
+	  if (!FRAME_WINDOW_P (it->f)
+	      /* If we exhausted the glyphs of the marginal area...	 */
+	      && it->area != area
+	      /* ...and the last character was multi-column...	*/
+	      && it->nglyphs > 1
+	      /* ...and not all of its glyphs fit in the marginal area... */
+	      && row->used[area] < n_glyphs_before + it->nglyphs)
+	      /* ...then reset back to the previous character.	*/
+	    row->used[area] = n_glyphs_before;
 	  /* If we didn't handle the line/wrap prefix above, and the
 	     call to set_iterator_to_next just switched to TEXT_AREA,
 	     process the prefix now.  */
@@ -35864,15 +35876,6 @@ note_mode_line_or_margin_highlight (Lisp_Object window, int x, int y,
 #ifdef HAVE_WINDOW_SYSTEM
   if (IMAGEP (object))
     {
-      if (glyph != NULL && glyph->type == IMAGE_GLYPH)
-	{
-	  struct image *img = IMAGE_OPT_FROM_ID (f, glyph->u.img_id);
-	  if (img != NULL && IMAGEP (img->spec))
-	    {
-	      dx += glyph->slice.img.x;
-	      dy += glyph->slice.img.y;
-	    }
-	}
       Lisp_Object image_map, hotspot;
       if ((image_map = plist_get (XCDR (object), QCmap),
 	   !NILP (image_map))
