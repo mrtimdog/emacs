@@ -79,7 +79,7 @@ ENVADD = $(AM_V_GEN)TEXINPUTS="$(srcdir):$(texinfodir):$(TEXINPUTS)" \
          MAKEINFO="$(MAKEINFO) $(MAKEINFO_OPTS)"
 
 DVI_TARGETS = emacs.dvi emacs-xtra.dvi
-HTML_TARGETS = emacs.html emacs_html
+HTML_TARGETS = emacs.html emacs_html eieio.html eieio_html
 PDF_TARGETS = emacs.pdf emacs-xtra.pdf
 PS_TARGETS = emacs.ps emacs-xtra.ps
 
@@ -175,10 +175,10 @@ emacs.dvi: ${EMACSSOURCES}
 emacs.pdf: ${EMACSSOURCES}
 	$(ENVADD) $(TEXI2PDF) $<
 
-emacs.html: ${EMACSSOURCES}
+$(filter %.html,$(HTML_TARGETS)): ${EMACSSOURCES}
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $<
 
-emacs_html: ${EMACSSOURCES}
+$(filter %_html,$(HTML_TARGETS)): ${EMACSSOURCES}
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $<
 
 emacs-xtra.dvi: $(EMACS_XTRA)

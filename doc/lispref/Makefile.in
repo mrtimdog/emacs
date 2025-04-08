@@ -157,10 +157,10 @@ $(buildinfodir)/elisp.info: $(srcs) $(auxfiles) | ${buildinfodir}
 elisp.dvi: $(srcs)
 	$(ENVADD) $(TEXI2DVI) $<
 
-elisp.html: $(srcs)
+$(filter %.html,$(HTML_TARGETS)): ${EMACSSOURCES}
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $<
 
-elisp_html: $(srcs)
+$(filter %_html,$(HTML_TARGETS)): ${EMACSSOURCES}
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $<
 
 elisp.pdf: $(srcs)
