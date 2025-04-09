@@ -130,7 +130,7 @@ install-dvi: dvi
 install-html: html
 	umask 022; $(MKDIR_P) "$(DESTDIR)$(htmldir)"
 	find $(HTML_TARGETS) -type f -exec \
-		$(INSTALL_DATA) -DT "{}" "$(DESTDIR)$(htmldir)/{}" \;
+		$(INSTALL_DATA) -D "{}" "$(DESTDIR)$(htmldir)/{}" \;
 install-pdf: pdf
 	 umask 022;$(MKDIR_P) "$(DESTDIR)$(pdfdir)"
 	$(INSTALL_DATA) $(PDF_TARGETS) "$(DESTDIR)$(pdfdir)"
@@ -154,8 +154,8 @@ uninstall-dvi:
 	  rm -f "$(DESTDIR)$(dvidir)/$${file}"; \
 	done
 uninstall-html:
-	for file in $(HTML_TARGETS); do \
-	  rm -f "$(DESTDIR)$(htmldir)/$${file}"; \
+	for path in $(HTML_TARGETS); do \
+	  rm -rf "$(DESTDIR)$(htmldir)/$${path}"; \
 	done
 uninstall-ps:
 	ext= ; [ -n "${GZIP_PROG}" ] && ext=.gz; \
