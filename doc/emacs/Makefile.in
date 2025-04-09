@@ -175,10 +175,16 @@ emacs.dvi: ${EMACSSOURCES}
 emacs.pdf: ${EMACSSOURCES}
 	$(ENVADD) $(TEXI2PDF) $<
 
-$(filter %.html,$(HTML_TARGETS)): ${EMACSSOURCES}
+emacs.html: ${EMACSSOURCES}
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $<
 
-$(filter %_html,$(HTML_TARGETS)): ${EMACSSOURCES}
+emacs_html: ${EMACSSOURCES}
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $<
+
+eieio.html: ${EMACSSOURCES}
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $<
+
+eieio_html: ${EMACSSOURCES}
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $<
 
 emacs-xtra.dvi: $(EMACS_XTRA)
