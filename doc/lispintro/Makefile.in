@@ -94,10 +94,12 @@ emacs-lisp-intro.pdf: ${srcs}
 	$(ENVADD) $(TEXI2PDF) $<
 
 $(filter %.html,$(HTML_TARGETS)): $(srcs)
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $(@:.html=.texi)
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ \
+            $(patsubst eintr.%,emacs-lisp-intro.%,$(@:.html=.texi))
 
 $(filter %_html,$(HTML_TARGETS)): $(srcs)
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $(@:_html=.texi)
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ \
+            $(patsubst eintr.%,emacs-lisp-intro.%,$(@:.html=.texi))
 
 emacs-lisp-intro.ps: emacs-lisp-intro.dvi
 	$(DVIPS) -o $@ $<
