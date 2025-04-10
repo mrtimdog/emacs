@@ -99,7 +99,7 @@ $(filter %.html,$(HTML_TARGETS)): $(srcs)
 
 $(filter %_html,$(HTML_TARGETS)): $(srcs)
 	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ \
-            $(patsubst eintr.%,emacs-lisp-intro.%,$(@:.html=.texi))
+            $(patsubst eintr.%,emacs-lisp-intro.%,$(@:_html=.texi))
 
 emacs-lisp-intro.ps: emacs-lisp-intro.dvi
 	$(DVIPS) -o $@ $<
