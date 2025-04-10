@@ -48,8 +48,6 @@ MKDIR_P = @MKDIR_P@
 
 GZIP_PROG = @GZIP_PROG@
 
-HTML_OPTS = --no-split --html
-
 # Options used only when making info output.
 # (Note that idlwave, info used --nosplit even without the .info extension.)
 INFO_OPTS= --no-split
@@ -102,7 +100,7 @@ texi_and_org = $(notdir ${ORG_SRC}) ${texi_notgen}
 SOURCES = $(sort ${texi_and_org})
 
 DVI_TARGETS  = $(TARGETS:=.dvi)
-HTML_TARGETS = $(TARGETS:=.html)
+HTML_TARGETS = $(TARGETS:=.html) $(TARGETS:=_html)
 PDF_TARGETS  = $(TARGETS:=.pdf)
 PS_TARGETS   = $(TARGETS:=.ps)
 
@@ -173,9 +171,11 @@ $(foreach ifile,$(filter-out info.info,$(INFO_TARGETS)),$(eval $(call info_templ
 %.pdf: ${srcdir}/%.texi ${gfdl} ${style}
 	$(ENVADD) $(TEXI2PDF) $<
 
-%.html: ${srcdir}/%.texi ${gfdl} ${style}
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) $(HTML_OPTS) $(EXTRA_OPTS) \
-	  -o $@ $<
+$(filter %.html,$(HTML_TARGETS)): ${srcdir}/%.texi ${gfdl} ${style}
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $(@:.html=.texi)"
+
+$(filter %_html,$(HTML_TARGETS)): ${srcdir}/%.texi ${gfdl} ${style}
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $(@:_html=.texi)"
 
 %.ps: %.dvi
 	$(DVIPS) -o $@ $<
@@ -214,7 +214,7 @@ efaq%.pdf: ${srcdir}/efaq%.texi
 	$(ENVADD) $(TEXI2PDF) $<
 
 efaq%.html: ${srcdir}/efaq%.texi
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) $(HTML_OPTS) -o $@ $<
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --no-split --html -o $@ $<
 
 ${buildinfodir}/emacs-mime.info emacs-mime.html: EXTRA_OPTS = --enable-encoding
 
