@@ -172,10 +172,10 @@ $(foreach ifile,$(filter-out info.info,$(INFO_TARGETS)),$(eval $(call info_templ
 	$(ENVADD) $(TEXI2PDF) $<
 
 $(filter %.html,$(HTML_TARGETS)): ${srcdir}/%.texi ${gfdl} ${style}
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $(@:.html=.texi)"
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html --no-split -o $@ $(@:.html=.texi)
 
 $(filter %_html,$(HTML_TARGETS)): ${srcdir}/%.texi ${gfdl} ${style}
-	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $(@:_html=.texi)"
+	$(AM_V_GEN)$(MAKEINFO) $(MAKEINFO_OPTS) --html -o $@ $(@:_html=.texi)
 
 %.ps: %.dvi
 	$(DVIPS) -o $@ $<
