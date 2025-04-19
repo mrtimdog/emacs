@@ -52,7 +52,16 @@
   (tab-bar-tabs-set nil))
 
 (ert-deftest tab-bar-tests-quit-restore-window ()
-  (skip-unless (and (eq system-type 'gnu/linux) (getenv "TERM")))
+  (skip-when (pcase system-type
+               ;; Skip test on MS-Windows in batch mode, since terminal
+               ;; frames cannot be created in that case.
+               ('windows-nt noninteractive)
+               ;; Emba runs the container without "--tty"
+               ;; (the environment variable "TERM" is nil), and this
+               ;; test fails with '(error "Could not open file: /dev/tty")'.
+               ;; Therefore skip it unless it can use '(tty-type . "linux")'.
+               ('gnu/linux (null (getenv "TERM")))))
+
   (let* ((frame-params (when noninteractive
                          '((window-system . nil)
                            (tty-type . "linux"))))

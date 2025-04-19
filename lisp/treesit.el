@@ -195,9 +195,8 @@ Returns the language at POSITION, or nil if there's no parser in the
 buffer.  When there are multiple parsers that cover POSITION, use the
 parser with the deepest embed level as it's the \"most relevant\" parser
 at POSITION."
-  (let ((parser (car (treesit-parsers-at position))))
-    (when parser
-      (treesit-parser-language parser))))
+  (when-let* ((parser (car (treesit-parsers-at position))))
+    (treesit-parser-language parser)))
 
 ;;; Node API supplement
 
@@ -5276,6 +5275,36 @@ If anything goes wrong, this function signals an `treesit-error'."
         (make-directory dest-dir t))
       (dolist (file (directory-files query-dir t "\\.scm\\'" t))
         (copy-file file (expand-file-name (file-name-nondirectory file) dest-dir) t)))))
+
+(defcustom treesit-auto-install-grammar 'ask
+  "Whether to install tree-sitter language grammar libraries when needed.
+This controls whether Emacs will install missing grammar libraries
+when they are needed by some tree-sitter based mode.
+If `ask', ask for confirmation before installing the required grammar library.
+If `always', install the grammar library without asking.
+If nil or `never' or anything else, don't install the grammar library
+even while visiting a file in the mode that requires such grammar; this
+might display a warning and/or fail to turn on the mode."
+  :type '(choice (const :tag "Never install grammar libraries" never)
+                 (const :tag "Always automatically install grammar libraries"
+                        always)
+                 (const :tag "Ask whether to install missing grammar libraries"
+                        ask))
+  :version "31.1")
+
+(defun treesit-ensure-installed (lang)
+  "Ensure that the grammar library for the language LANG is installed.
+The option `treesit-auto-install-grammar' defines whether to install
+the grammar library if it's unavailable."
+  (or (treesit-ready-p lang t)
+      (when (or (eq treesit-auto-install-grammar 'always)
+                (and (eq treesit-auto-install-grammar 'ask)
+                     (y-or-n-p (format "\
+Tree-sitter grammar for `%s' is missing; install it?"
+                                       lang))))
+        (treesit-install-language-grammar lang)
+        ;; Check that the grammar was installed successfully
+        (treesit-ready-p lang))))
 
 ;;; Shortdocs
 
