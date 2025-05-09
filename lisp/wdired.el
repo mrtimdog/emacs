@@ -626,7 +626,7 @@ non-nil means return old filename."
                  (format "Rename of '%s' to '%s' failed; target name collision"
                          (car rename) file-new)))
             (dired-log msg)
-            (error msg))
+            (error msg)))
          ((assoc file-new renames)
           ;; Renaming to a file name that already exists but will itself be
           ;; renamed as well.  Let's wait until that one gets renamed.
