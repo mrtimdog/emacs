@@ -622,7 +622,11 @@ non-nil means return old filename."
              (file-new (cdr rename)))
         (cond
          ((rassoc file-new renames)
-          (error "Trying to rename 2 files to the same name"))
+          (let ((msg
+                 (format "Rename of '%s' to '%s' failed; target name collision"
+                         (car rename) file-new)))
+            (dired-log msg)
+            (error msg))
          ((assoc file-new renames)
           ;; Renaming to a file name that already exists but will itself be
           ;; renamed as well.  Let's wait until that one gets renamed.
@@ -640,8 +644,12 @@ non-nil means return old filename."
             ;; We have not made any progress and we've reached the end of
             ;; the renames, so we really have a circular conflict, and we
             ;; have to forcefully break the cycle.
-            (message "Circular renaming: using temporary file name")
             (let ((tmp (make-temp-name file-new)))
+              (let ((msg (format
+                          "Rename of '%s' to '%s' conflict; using temp '%s'"
+                          (car rename) file-new tmp)))
+                (dired-log msg)
+                (message msg))
               (push (cons (car rename) tmp) renames)
               (push (cons tmp file-new) residue))))
          (t
