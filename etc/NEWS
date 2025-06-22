@@ -563,6 +563,16 @@ You can now insert or wrap text with multiple sets of parentheses and
 other matching delimiters at once with Electric Pair mode, by providing
 a prefix argument when inserting one of the delimiters.
 
+---
+** Electric pair mode now supports multi-character paired delimiters.
+'electric-pair-pairs' and 'electric-pair-text-pairs' now allows using
+strings for multi-character paired delimiters.
+
+To use this add a list to both electric pair variables: ("/*" . "*/").
+
+You can also specify to insert an extra space after the first string
+pair: ("/*" " */" t).
+
 +++
 ** You can now use 'M-~' during 'C-x s' ('save-some-buffers').
 Typing 'M-~' while saving some buffers means not to save the buffer and
@@ -1904,6 +1914,14 @@ the command will only copy those files.
 +++
 *** package-x.el is now obsolete.
 
+---
+*** Package menu now highlights packages marked for installation or deletion.
+
+*** Package menu now displays the total number of the package type.
+Package menu now displays in the mode line the total number of packages
+installed, total number of packages from all the package archives, total
+number of packages to upgrade and total number of new packages
+available.
 
 ** RCIRC
 
