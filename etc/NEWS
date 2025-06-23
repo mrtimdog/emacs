@@ -922,7 +922,8 @@ are discarded, which matches the behavior of physical terminals and other
 terminal emulators. Control sequences and escape sequences are still processed
 correctly regardless of margin position.
 
-** Smerge
+---
+** SMerge
 
 *** New command 'smerge-extend' extends a conflict over surrounding lines.
 
@@ -930,6 +931,18 @@ correctly regardless of margin position.
 When used inside a refined chunk, it jumps to the matching position in
 the "other" side of the refinement: if you're in the new text, it jumps
 to the corresponding position in the old text and vice versa.
+
+*** New variable 'smerge-refine-shadow-cursor'.
+When 'smerge-refine' shows the conflict diffs at word granularity, a
+"shadow cursor" is now displayed in the "lower" version when point
+is in the "upper" version, and vice versa.  The "shadow cursor" is
+just the character corresponding to the position where
+'smerge-refine-exchange-point' would jump, shown in a new distinct
+face 'smerge-refine-shadow-cursor', by default a box face.
+
+** Cursor-Sensor mode
++++
+*** New direction 'moved' used when the cursor moved within the active area.
 
 ** Image Dired
 
@@ -1041,6 +1054,15 @@ compatible.
 *** New user option 'recentf-show-messages'.
 'recentf-save-list' can print a message when saving the recentf list.
 The new option, if set to nil, suppresses this message.
+
+---
+*** New user option 'recentf-suppress-open-file-help'.
+By default, invoking 'recentf-open-files' displays a message saying what
+action clicking or typing RET on the item at point executes, and tabbing
+between items in the *Open Recent* buffer likewise displays such
+messages.  To suppress these messages, customize the user option
+'recentf-suppress-open-file-help' to non-nil.  The default value of this
+option is nil.
 
 ** Saveplace
 
