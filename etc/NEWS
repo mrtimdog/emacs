@@ -353,6 +353,13 @@ This option allows changing or removing the delimiters shown around
 the major mode and list of minor modes in the mode line.  The default
 retains the existing behavior of inserting parentheses.
 
++++
+*** New minor mode 'mode-line-invisible-mode'.
+This minor mode makes the mode-line of the current buffer invisible.
+The command 'mode-line-invisible-mode' toggles the visibility of the
+current-buffer's mode-line.  The default is to show the mode line of
+every buffer.
+
 ** Tab Bars and Tab Lines
 
 ---
@@ -2025,6 +2032,14 @@ installed, total number of packages from all the package archives, total
 number of packages to upgrade and total number of new packages
 available.
 
++++
+*** New functions to query builtin package information.
+'package-versioned-builtin-packages' returns a list of symbols of
+built-in packages; 'package-builtin-package-version' returns the
+version-list of a given package symbol.  These functions provide public
+interfaces for external tools to query information about built-in
+packages.
+
 ** Rcirc
 
 +++
@@ -2232,6 +2247,12 @@ It has the same meaning as the INHERIT argument to 'face-attribute',
 which already takes this argument for a single attribute.  This is
 useful when you want the face attributes to be absolute and not
 'unspecified'.
+
+---
+*** New user option 'ffap-prefer-remote-file'.
+If non-nil, FFAP always finds remote files in buffers with remote
+'default-directory'.  If nil, FFAP finds local files first for absolute
+filenames in above buffers.  The default is nil.
 
 ---
 ** Flymake
