@@ -1752,7 +1752,7 @@ itself responsible for the file (usually because other files in that
 directory are already registered under that backend) will be used to
 register the file.  If no backend declares itself responsible, the
 first backend that could register the file is used."
-  (interactive "P")
+  (interactive)
   (let* ((fileset-arg (or vc-fileset (vc-deduce-fileset nil t)))
          (backend (car fileset-arg))
 	 (files (nth 1 fileset-arg)))
@@ -2286,7 +2286,7 @@ Return t if the buffer had changes, nil otherwise."
 	   (if files (vc-coding-system-for-diff (car files)) 'undecided)
            'unix))
          (orig-diff-buffer-clone
-          (if revert-buffer-in-progress-p
+          (if revert-buffer-in-progress
               (clone-buffer
                (generate-new-buffer-name " *vc-diff-clone*") nil))))
     ;; On MS-Windows and MS-DOS, Diff is likely to produce DOS-style
@@ -4406,7 +4406,7 @@ When called from Lisp, BACKEND is the VC backend."
   (when-let* ((p (project-current)))
     (project-remember-project p nil t))
   (when-let* ((p (project-current nil directory)))
-    (project-remember-project p nil t))
+    (project-remember-project p))
 
   (vc-dir directory backend))
 
@@ -4489,29 +4489,32 @@ BACKEND is the VC backend."
   (let ((from (expand-file-name from)))
     (dired-rename-subdir from (expand-file-name to))
     (dolist (buf vc-dir-buffers)
-      (with-current-buffer buf
-        (when (string-prefix-p from default-directory)
-          (setq default-directory
-                (expand-file-name (file-relative-name default-directory from)
-                                  to))
-          ;; Obtain an appropriately uniquify'd name for a *vc-dir*
-          ;; buffer in the new working tree.  In particular if this
-          ;; *vc-dir* buffer already has a uniquify'd name appropriate
-          ;; for the old working tree, we must replace that.
-          ;; See also `vc-dir-prepare-status-buffer'.
-          ;; FIXME: There should be a way to get this information
-          ;; without creating and killing a buffer.
-          (let (name)
-            (unwind-protect
-                (setq name (buffer-name
-                            (create-file-buffer
-                             (expand-file-name "*vc-dir*"
-                                               default-directory))))
-              (kill-buffer name))
-            (rename-buffer name))))))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf
+          (when (string-prefix-p from default-directory)
+            (setq default-directory
+                  (expand-file-name (file-relative-name default-directory from)
+                                    to))
+            ;; If the *vc-dir* buffer has a uniquify'd name then we need
+            ;; to obtain an new uniquify'd name for this buffer under
+            ;; the new working tree, replacing the one for the old
+            ;; working tree.  See also `vc-dir-prepare-status-buffer'.
+            (when-let* ((base-name (uniquify-buffer-base-name))
+                        (item (cl-find (current-buffer) uniquify-managed
+                                       :key #'uniquify-item-buffer)))
+              (let (name)
+                ;; FIXME: There should be a way to get this information
+                ;; without creating and killing a buffer.
+                (unwind-protect
+                    (setq name (buffer-name
+                                (create-file-buffer
+                                 (expand-file-name base-name
+                                                   default-directory))))
+                  (kill-buffer name))
+                (uniquify-rename-buffer item name))))))))
 
   (when-let* ((p (project-current nil to)))
-    (project-remember-project p nil t)))
+    (project-remember-project p)))
 
 
 
