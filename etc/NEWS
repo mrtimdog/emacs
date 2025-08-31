@@ -614,6 +614,14 @@ To use the ':foreground' or current text color ensure the 'fill' attribute
 in the SVG is set to 'currentcolor', or set the image spec's ':css'
 value to 'svg {fill: currentcolor;}'.
 
+---
+** Errors signaled by 'emacsclient' connections can now enter the debugger.
+If 'debug-on-error' is non-nil, errors signaled by Lisp programs
+executed due to 'emacsclient' connections will now enter the Lisp
+debugger and show the backtrace.  If 'debug-on-error' is nil, these
+errors will be sent to 'emacsclient', as before, and will be displayed
+on the terminal from which 'emacsclient' was invoked.
+
 
 * Editing Changes in Emacs 31.1
 
@@ -2174,6 +2182,14 @@ include were committed and will be pushed.
 current VC fileset.
 
 +++
+*** New commands to report diffs of outstanding changes.
+'C-x v B =' ('vc-diff-outgoing-base') and 'C-x v B D'
+('vc-root-diff-outgoing-base') report diffs of changes since the merge
+base with the remote branch, including uncommitted changes.
+They are useful to view all outstanding (unmerged, unpushed) changes on
+the current branch.
+
++++
 *** New user option 'vc-use-incoming-outgoing-prefixes'.
 If this is customized to non-nil, 'C-x v I' and 'C-x v O' become prefix
 commands, such that the new incoming and outgoing commands have global
@@ -2845,6 +2861,12 @@ If the new variable 'load-path-filter-function' is set to the new
 function 'load-path-filter-cache-directory-files', calling 'load' will
 cache the directories it scans and their files, and the following
 lookups should be faster.
+
++++
+** 'let-alist' supports indexing into lists.
+The macro 'let-alist' now interprets symbols containing numbers as list
+indices.  For example, '.key.0' looks up 'key' in the alist and then
+returns its first element.
 
 ** Lexical binding
 
